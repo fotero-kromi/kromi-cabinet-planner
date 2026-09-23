@@ -13,6 +13,10 @@
         "rows": 720,
         "sha256": "2f8cd61c8bc9f16786560ab84d2c4ab8c900c84728a5e28b92a1169f19320d7e"
       },
+      "plan_result": {
+        "rows": 720,
+        "sha256": "49a1fd7f646d801c57ffd25e2d098a8952d783ddf1de282b83072a5e8f3929ae"
+      },
       "workbook": {
         "sha256": "7d850c8c14e760a34ebd4759112f8900578ff1957b95265e71a0424b30245f13"
       }
@@ -29,6 +33,10 @@
       "pertool": {
         "rows": 364,
         "sha256": "45e2500d508e61cce8ebf0a2a8edda74677d86766c51ce262c5a066a28812d10"
+      },
+      "plan_result": {
+        "rows": 364,
+        "sha256": "5c693acb8a9c412c3f668c9e57b6f281c34c230651c21724315910c3e40130ca"
       },
       "workbook": {
         "sha256": "746fb7f02e166f0cc98a63c68eb78736478041ff6afb4a870e165637e726e3a0"
@@ -63,6 +71,10 @@
       "pertool": {
         "rows": 360,
         "sha256": "d1c94ef0972d94c66e7f16f9d56779f3e7685480f8058ee0b56e51480aeadea3"
+      },
+      "plan_result": {
+        "rows": 360,
+        "sha256": "94d58c02858112db15b46612399fec2c5414da05205ec49ecc01a92fc64794e7"
       },
       "workbook": {
         "sha256": "1f33c55f7da3df88b9610268e3a3a927a70a0e3cbaa760f913cf4dea0bce110b"

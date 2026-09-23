@@ -221,6 +221,31 @@ def workbook_digest(data: bytes) -> str:
     return _sha(json.dumps(dump, sort_keys=True))
 
 
+#: The parts of the planner's result the plan-result digest covers.
+PLAN_RESULT_PARTS = ("bucket_plans", "grand", "restock_info", "vend_stats", "override_stats",
+                     "validation_issues", "split_coverage", "listings", "rebalance_audit",
+                     "sp_conservation")
+
+
+def _strict_json(value: Any) -> Any:
+    """JSON for numpy scalars; anything else unknown is an error, never its repr."""
+    item = getattr(value, "item", None)
+    if callable(item) and type(value).__module__ == "numpy":
+        return item()
+    raise TypeError(f"plan result holds an unsupported {type(value).__name__}")
+
+
+def plan_result_digest(result: Any) -> Dict[str, Any]:
+    """Digest of what the planner returned (``plan.run_plan``): the article rows
+    and the listed parts. The rewrite's parity oracle; unlike the plan-table
+    digests it does not depend on the SQLite archive's layout."""
+    payload = {"work": frame_digest(result.work)}
+    for part in PLAN_RESULT_PARTS:
+        payload[part] = getattr(result, part)
+    text = json.dumps(payload, sort_keys=True, default=_strict_json)
+    return {"rows": int(len(result.work)), "sha256": _sha(text)}
+
+
 def _plan_digests(db_path: str) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     if not os.path.exists(db_path):
@@ -263,7 +288,22 @@ def run_scenario(name: str, work_dir: str) -> Dict[str, Any]:
             captured[label] = bytes(payload)
         return orig_dl(*args, **kw)
 
+    # The planner's own result, copied at once because the page adds its
+    # display columns to the frame it receives.
+    import copy
+
+    import engine.plan as engine_plan
+
+    plan_results: List[Any] = []
+    orig_run_plan = engine_plan.run_plan
+
+    def plan_spy(work, overrides, params):
+        result = orig_run_plan(work, overrides, params)
+        plan_results.append(copy.deepcopy(result))
+        return result
+
     st.download_button = spy
+    engine_plan.run_plan = plan_spy
     st.cache_data.clear()
     try:
         seed = build_seed({**_REQUIRED, **spec["controls"], "ks_sheet_tools": SHEET}, cols)
@@ -300,7 +340,13 @@ def run_scenario(name: str, work_dir: str) -> Dict[str, Any]:
             _raise(at, name, "exports")
     finally:
         st.download_button = orig_dl
+        engine_plan.run_plan = orig_run_plan
     digests: Dict[str, Any] = dict(_plan_digests(db_path))
+    if plan_results:
+        seen = [plan_result_digest(r) for r in plan_results]
+        if any(d != seen[-1] for d in seen):
+            raise RuntimeError(f"{name}: the planner ran {len(seen)} times with different results")
+        digests["plan_result"] = seen[-1]
     book = next((b for lbl, b in captured.items()
                  if spec["download"] in lbl.lower() and b[:2] == b"PK"), None)
     if book is None:

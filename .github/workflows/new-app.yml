@@ -1,0 +1,66 @@
+name: New app
+
+# The FastAPI + React rewrite (docs/Rewrite_Decision.md). The Streamlit app's
+# gate keeps running on this branch in ci.yml.
+on:
+  push:
+    branches: [rewrite/fastapi-react]
+  pull_request:
+    branches: [rewrite/fastapi-react]
+
+jobs:
+  backend:
+    name: Back end (Python 3.12, PostgreSQL 18)
+    runs-on: ubuntu-latest
+
+    # A real PostgreSQL service for every test. Major version 18 (the tag
+    # follows its newest minor release); the Docker setup uses the same tag.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: kromi
+          POSTGRES_PASSWORD: kromi
+          POSTGRES_DB: kromi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kromi -d kromi_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      KROMI_TEST_DATABASE_URL: postgresql+psycopg://kromi:kromi@127.0.0.1:5432/kromi_test
+      KROMI_EXPECT_POSTGRES_MAJOR: "18"
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Types (mypy)
+        run: mypy
+
+      # Includes the parity oracle (the synthetic scenarios must match the
+      # Streamlit app's manifest), the PostgreSQL round trip and the migrations.
+      - name: Tests (pytest)
+        run: pytest

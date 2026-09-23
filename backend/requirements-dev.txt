@@ -1,0 +1,10 @@
+# The new app's back end: tests and checks (not needed to run it).
+# Install: pip install -r backend/requirements-dev.txt
+
+-r requirements.txt
+
+pytest>=8.0
+# The test client of FastAPI (Starlette 1.x) uses httpx2.
+httpx2>=2.13
+ruff==0.15.20
+mypy==2.1.0
