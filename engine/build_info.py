@@ -13,7 +13,7 @@ Convention: bump the patch component for any code change that ships
 from __future__ import annotations
 
 # IMPORTANT: bump this on every code change that ships.
-BUILD = "v34.60"
+BUILD = "v34.61"
 
 
 def build_stamp() -> str:

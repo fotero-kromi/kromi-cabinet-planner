@@ -8,6 +8,9 @@ cabinets to the default and ignore the user. This is now structurally impossible
 the constants are imported under alias names used only to seed the widgets, and
 the run-time values live in plainly-named lower-case variables.
 
+Since v34.61 the widgets are seeded from engine/planning_defaults.py, so the page
+no longer imports the constants at all.
+
 These tests pin that structure so the shadow cannot return, and demonstrate why
 it matters by showing the factors do drive sizing on data where they are not
 masked by the minimum-allocation floor.
@@ -38,24 +41,22 @@ def _page_src() -> str:
 # Static guards: the shadow cannot come back
 # ---------------------------------------------------------------------------
 
-def test_bare_reserve_constant_only_in_aliased_import():
-    src = _page_src()
-    hits = re.findall(r"\bCAROUSEL_RESERVE_FACTOR\b", src)
-    assert len(hits) == 1, f"expected only the aliased import, found {len(hits)} references"
+def test_bare_reserve_constant_never_in_the_page():
+    hits = re.findall(r"\bCAROUSEL_RESERVE_FACTOR\b", _page_src())
+    assert hits == [], f"the page must not read the bare constant ({len(hits)} references)"
 
 
-def test_bare_overfill_constant_only_in_aliased_import():
-    src = _page_src()
-    hits = re.findall(r"\bHELIX_SINGLE_SPIRAL_OVERFILL_FACTOR\b", src)
-    assert len(hits) == 1, f"expected only the aliased import, found {len(hits)} references"
+def test_bare_overfill_constant_never_in_the_page():
+    hits = re.findall(r"\bHELIX_SINGLE_SPIRAL_OVERFILL_FACTOR\b", _page_src())
+    assert hits == [], f"the page must not read the bare constant ({len(hits)} references)"
 
 
-def test_reserve_constant_is_aliased():
-    assert "CAROUSEL_RESERVE_FACTOR as _DEFAULT_RESERVE_FACTOR" in _page_src()
+def test_reserve_widget_is_seeded_from_the_shared_defaults():
+    assert "value=DEFAULTS.carousel_reserve_factor" in _page_src()
 
 
-def test_overfill_constant_is_aliased():
-    assert "HELIX_SINGLE_SPIRAL_OVERFILL_FACTOR as _DEFAULT_OVERFILL_FACTOR" in _page_src()
+def test_overfill_widget_is_seeded_from_the_shared_defaults():
+    assert "value=DEFAULTS.helix_overfill_factor" in _page_src()
 
 
 def test_reserve_runvar_assigned_from_ui():
@@ -78,10 +79,10 @@ def test_runtime_factors_read_through_the_frozen_config():
     assert not re.search(r"^carousel_reserve_factor = ", src, re.MULTILINE)
 
 
-def test_widget_defaults_use_the_aliased_constants():
+def test_the_old_aliases_are_gone():
     src = _page_src()
-    assert "value=_DEFAULT_RESERVE_FACTOR" in src
-    assert "value=_DEFAULT_OVERFILL_FACTOR" in src
+    assert "_DEFAULT_RESERVE_FACTOR" not in src
+    assert "_DEFAULT_OVERFILL_FACTOR" not in src
 
 
 def test_no_redundant_overfill_redeclaration():
@@ -89,10 +90,11 @@ def test_no_redundant_overfill_redeclaration():
     assert not re.search(r"^helix_overfill_factor = 1\.10\s*$", _page_src(), re.MULTILINE)
 
 
-def test_aliases_referenced_only_at_import_and_default():
+def test_defaults_referenced_only_as_the_widget_default():
+    # read once to seed the widget, never as the run-time value
     src = _page_src()
-    assert len(re.findall(r"_DEFAULT_RESERVE_FACTOR", src)) == 2
-    assert len(re.findall(r"_DEFAULT_OVERFILL_FACTOR", src)) == 2
+    assert len(re.findall(r"DEFAULTS\.carousel_reserve_factor\b", src)) == 1
+    assert len(re.findall(r"DEFAULTS\.helix_overfill_factor\b", src)) == 1
 
 
 # ---------------------------------------------------------------------------
