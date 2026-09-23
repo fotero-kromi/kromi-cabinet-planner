@@ -25,6 +25,13 @@ def test_the_digests_are_sha256():
     assert len(check.BANNED_FOLDED_DIGESTS) >= 17
 
 
+def test_the_exact_digests_cover_both_capitals_only_names():
+    assert check.BANNED_EXACT_DIGESTS >= {
+        "d2ac5074f36fa05024f4b8a54a6ea014206e0fe059e8f682e971584d6f06d176",
+        "b10d9b161099c0f642245383b8f3e99181695e41b5dd8eaf0a583378a5ec8a1f",
+    }
+
+
 def test_words_pairs_and_capitals_are_found():
     text = "Zorblax, the QUINT-vell and ZAP but not zap or zorblaxes."
     found = check.find_banned_names(text, folded=_folded("zorblax", "quint vell"),
