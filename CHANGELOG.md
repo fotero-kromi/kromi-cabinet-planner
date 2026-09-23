@@ -3,6 +3,41 @@
 
 All notable changes to the Kromi Cabinet Planner are documented here.
 
+## [v34.62] - Column suggestions and run settings move into the engine
+
+Second preparation step for the rewrite: the remaining page logic a standard
+run depends on moves into the engine, so the new app copies nothing. Planning
+results and exports are byte-identical to v34.61 (synthetic manifest
+unchanged).
+
+- `engine/column_suggest.py`: the column each planning field starts from. The
+  13 optional synonym lists moved from the page (compared word for word);
+  `suggest_columns` keeps the page's order: the AI proposal, else the synonym
+  match, the stock column by its own rule, then no optional field takes a
+  column a required or earlier optional field already uses.
+- `engine/run_settings.py`: `RunSettings`, the typed settings of one run (every
+  default from `planning_defaults`); `effective_settings` applies the mode
+  rules the page's controls applied (special coverage follows the standard
+  coverage without a Standard/Special column; one listing or the fixed
+  configuration plans combined; the fixed configuration keeps no buffer, fills
+  carousels to 1.0 and does not consolidate; outside it the machines, headroom
+  and stock promotion do not apply; class thresholds only while switched on);
+  `build_plan_params` builds `PlanParams`. Also `plan_config`,
+  `program_mapping_active`, `restock_slots_total` and the label parsing for the
+  supply-point and Tools + PPE choices, with the page's exact meaning.
+- The page builds its planner parameters, programme flag and restock total
+  through these functions.
+- Verification: 25 new tests (`test_run_settings.py`, `test_column_suggest.py`),
+  red before the modules existed. The synthetic gate is unchanged; the four
+  scenarios exported with the technical sheets on are identical to v34.60, and
+  so are two extra one-off scenarios covering per-class thresholds, a
+  Standard/Special column with its own coverage and special tools as KTC,
+  restock categories, three partitioned supply points, consolidation off and
+  changed sizing factors (plan tables and technical workbook). The private
+  golden gate on a real customer workbook is required before merging.
+  `python tools/check.py --tests`: 2,225 passed / 25 skipped / 0 failed
+  (Python 3.11; the same on Python 3.10).
+
 ## [v34.61] - Tool list, export tables and setting defaults move into the engine
 
 Preparation for the rewrite: the new app will call the same engine functions
