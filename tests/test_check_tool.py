@@ -80,6 +80,6 @@ def test_without_git_the_release_list_is_scanned(tmp_path):
 
 
 def test_the_customer_file_types_stay_out_of_git():
-    ignored = Path(check.ROOT, ".gitignore").read_text().splitlines()
+    ignored = Path(check.ROOT, ".gitignore").read_text(encoding="utf-8").splitlines()
     for pattern in ("*.xlsx", "*.xls", "*.xlsm", "*.csv"):
         assert pattern in ignored

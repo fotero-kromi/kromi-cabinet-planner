@@ -3,6 +3,33 @@
 
 All notable changes to the Kromi Cabinet Planner are documented here.
 
+## [v34.60] - Quality gate passes on fresh installs and on Windows
+
+Hotfix for the gate introduced in v34.59. Planning results and exports are
+byte-identical to v34.59 (synthetic manifest unchanged).
+
+- `tools/synthetic_golden.py`: the plan-table digests used
+  `frame.to_csv(index=False)`, which ends rows with `os.linesep`, so every plan
+  digest differed from the manifest on Windows. Hashing moved into
+  `frame_digest(frame)`, which passes `lineterminator="\n"`. New test: the
+  digest is the same with `os.linesep` set to `"\r\n"` and to `"\n"` (red
+  before the fix).
+- `tests/test_factor_injection_guard.py` read a source file without an
+  encoding, which fails under cp1252 on Windows; it now reads UTF-8, as does
+  one `.gitignore` read in `tests/test_check_tool.py`. New
+  `tests/test_text_encoding.py`: no text-mode `open()` or `read_text()` in
+  `engine/`, `db/`, `ui/`, `pages/`, `tools/` or `tests/` omits the encoding
+  (red with the two findings before the fix).
+- `requirements-dev.txt` pins `numpy<2.5`: numpy 2.5 needs Python 3.12 and its
+  type stubs use the 3.12 `type` statement, so mypy (python_version 3.10)
+  stopped on `numpy/__init__.pyi` on every fresh 3.12 install. Reproduced with
+  numpy 2.5.3 on Python 3.12, green with 2.4.6. New contract in
+  `tests/test_requirements_floor.py`.
+- CI: a `windows-latest` job (Python 3.11) runs ruff, mypy and the suite;
+  reported, not blocking (`continue-on-error`) until it has proven stable.
+  Contract in `tests/test_ci_workflow.py`.
+- Verification: see the PR (suite counts from `python tools/check.py --tests`).
+
 ## [v34.59] - Synthetic golden gate, one quality gate, GitHub repository
 
 Step 0 of the code professionalization plan (docs/Code_Professionalization_Plan.md):

@@ -44,3 +44,12 @@ def test_openai_has_an_upper_bound():
 
 def test_defusedxml_is_declared():
     assert _spec("defusedxml") is not None
+
+
+def test_dev_tools_pin_numpy_below_the_312_only_stubs():
+    # v34.60: numpy 2.5 type stubs use the Python 3.12 'type' statement, and
+    # mypy (python_version 3.10) stops on numpy/__init__.pyi. numpy 2.5 needs
+    # Python 3.12, so a fresh 3.12 install broke the type gate.
+    lines = (REPO / "requirements-dev.txt").read_text(encoding="utf-8").splitlines()
+    specs = [ln.split("#")[0].replace(" ", "") for ln in lines]
+    assert "numpy<2.5" in specs

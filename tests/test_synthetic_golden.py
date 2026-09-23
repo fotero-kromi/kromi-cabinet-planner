@@ -67,6 +67,16 @@ def test_the_workbook_digest_ignores_only_the_environment():
     assert sg.workbook_digest(_book(base, 2)) != d
 
 
+def test_the_plan_digest_ignores_the_platform_line_ending(monkeypatch):
+    # v34.60: to_csv() ends rows with os.linesep, so on Windows every plan
+    # digest differed from the manifest. The digest must not depend on it.
+    frame = pd.DataFrame({"Code": ["A", "B"], "Spirals_needed": [1, 2]})
+    monkeypatch.setattr(sg.os, "linesep", "\n")
+    unix = sg.frame_digest(frame)
+    monkeypatch.setattr(sg.os, "linesep", "\r\n")
+    assert sg.frame_digest(frame) == unix
+
+
 @pytest.mark.parametrize("scenario", list(sg.SCENARIOS))
 def test_the_scenario_matches_the_manifest(scenario, tmp_path):
     want = sg.load_manifest()["scenarios"][scenario]

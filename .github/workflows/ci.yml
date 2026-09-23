@@ -68,3 +68,43 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r requirements.txt
+
+  # v34.60: the same gates on Windows, where users run the app. Plan digests
+  # (os.linesep) and source reads (cp1252) broke there before this build.
+  # Reported, not blocking, until the job has been green for a few releases.
+  windows:
+    name: Tests on Windows (Python 3.11)
+    runs-on: windows-latest
+    continue-on-error: true
+    # bash stops at the first failing line of a multi-line step; PowerShell
+    # would report only the exit code of the last one.
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint gate (ruff)
+        run: |
+          ruff check --select F821 .
+          ruff check --select E9,F63,F7,F82,F811 .
+          ruff check --select F401 .
+
+      - name: Type gate (mypy)
+        run: mypy
+
+      - name: Run tests (pytest)
+        run: pytest

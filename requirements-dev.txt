@@ -9,3 +9,5 @@ pytest>=8.0
 ruff==0.15.20
 mypy==2.1.0
 pyflakes>=3.2
+# numpy 2.5 stubs use the Python 3.12 'type' statement, which mypy (python_version 3.10) rejects.
+numpy<2.5

@@ -68,7 +68,7 @@ def _violations(path, resolve):
     `resolve(call_name)` returns the engine function name the call refers to, or
     None if the call is not a bare-engine call we should police.
     """
-    tree = ast.parse(open(path).read())
+    tree = ast.parse(open(path, encoding="utf-8").read())
     bad = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):

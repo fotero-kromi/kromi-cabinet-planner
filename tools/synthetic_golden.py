@@ -195,6 +195,14 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def frame_digest(frame: pd.DataFrame) -> str:
+    """Content digest of a plan table, as CSV without the index.
+
+    The line terminator is fixed: to_csv() defaults to os.linesep, which made
+    every plan digest differ on Windows (v34.60)."""
+    return _sha(frame.to_csv(index=False, lineterminator="\n"))
+
+
 def workbook_digest(data: bytes) -> str:
     """Content digest of an exported workbook: every sheet, every cell as
     text, without the build, the timestamp and the AI model rows."""
@@ -221,7 +229,7 @@ def _plan_digests(db_path: str) -> Dict[str, Any]:
     try:
         for name, sql in _PLAN_SQL.items():
             frame = pd.read_sql_query(sql, conn)
-            out[name] = {"rows": int(len(frame)), "sha256": _sha(frame.to_csv(index=False))}
+            out[name] = {"rows": int(len(frame)), "sha256": frame_digest(frame)}
     finally:
         conn.close()
     return out

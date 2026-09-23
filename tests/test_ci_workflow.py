@@ -6,6 +6,7 @@ undefined names"), so the gate failed every run and pytest, ruff and mypy
 never executed. The gate now uses ruff's F821 rule, which reports real
 undefined names only, and a dependency audit runs alongside.
 """
+import re
 import shutil
 import subprocess
 import sys
@@ -40,3 +41,22 @@ def test_undefined_name_gate_passes_on_this_tree():
     r = subprocess.run([sys.executable, "-m", "ruff", "check", "--select", "F821", "."],
                        cwd=REPO, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def _jobs():
+    """Job name -> its text block (two-space indented keys under 'jobs:')."""
+    body = _text().split("\njobs:\n", 1)[1]
+    blocks = re.split(r"^  (?=[\w-]+:\s*$)", body, flags=re.M)
+    return {b.split(":", 1)[0]: b for b in blocks if b.strip()}
+
+
+def test_a_windows_job_runs_the_suite():
+    # v34.60: users run the app on Windows, where the suite broke on line
+    # endings and cp1252. The job reports without blocking until it is proven.
+    windows = [b for b in _jobs().values() if re.search(r"runs-on:\s*windows-latest", b)]
+    assert len(windows) == 1
+    job = windows[0]
+    assert re.search(r"""python-version:\s*["']?3\.11["']?""", job)
+    assert re.search(r"^    continue-on-error:\s*true", job, flags=re.M)
+    for step in ("requirements-dev.txt", "pytest", "mypy", "ruff check"):
+        assert step in job, step
