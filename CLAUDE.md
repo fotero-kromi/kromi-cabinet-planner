@@ -10,8 +10,7 @@ owner has set over many releases; they are not optional.
   spirals, Carousel compartments, Lockers) or Kanban, sizes or fits the cabinets
   per supply point, assigns 12-digit KROMI article numbers and exports a result
   workbook, takeover sheets, an article setup sheet and a deck.
-- The owner is the Head of Logistics: product owner and technical lead, not a
-  professional developer. Explain decisions in plain words.
+- Explain decisions in plain words.
 - Today: Python 3.10 to 3.12, Streamlit 1.58 UI (`Home.py`, `pages/`, `ui/`), a pure
   pandas engine (`engine/`), SQLite (`db/`). A rewrite without Streamlit is being
   prototyped on branch `rewrite/fastapi-react` (see `docs/Rewrite_Decision.md`).
@@ -46,6 +45,8 @@ python tools/package_release.py . kromi_app_vXX.YY.zip   # release zip (allow-li
 6. **The engine stays pure**: nothing in `engine/` imports Streamlit (an AST test
    checks it). New domain logic goes into `engine/`, not into the page.
 7. **Wording**: no em dash (use "-"), none of the filler words the check lists.
+8. **Personal working rules** come from the session environment, not from this
+   repository; never copy them into any file.
 
 ## Release ceremony (every build)
 
@@ -74,10 +75,7 @@ python tools/package_release.py . kromi_app_vXX.YY.zip   # release zip (allow-li
 
 ## Talking to the owner
 
-- English, concise, bottom line first; no narration of routine steps.
-- German deliverables (emails, customer texts): add a literal English translation,
-  and use only characters on a German keyboard (no en or em dash, no middle dot).
-- Name things in plain words (for example "the supply point", not an internal key).
+- Concise, bottom line first; no narration of routine steps.
 
 ## Know before you change planning logic
 
@@ -85,6 +83,8 @@ python tools/package_release.py . kromi_app_vXX.YY.zip   # release zip (allow-li
   configuration, numbering. Most of it is pinned by tests; read it first.
 - `README.md`: architecture, module map, operational modes, configuration.
 - `docs/Roadmap_Status.md`: what shipped, owner decisions, what is next.
+- `docs/Project_Knowledge.md`: background, lessons, procedures (private golden gate,
+  onboarding recipes) and open points.
 - `docs/Code_Professionalization_Plan.md` and `docs/Principal_Audit_v34.47.md`:
   why the page is structured the way it is and what the audit asked for.
 - Streamlit test quirks: `AppTest` optional column-mapping seeds are popped by the

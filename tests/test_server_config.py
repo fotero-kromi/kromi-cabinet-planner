@@ -8,8 +8,12 @@ shipped configuration binds to the local machine only and keeps error details
 possible, but only as an explicit launch option (see README).
 """
 
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 CONFIG = Path(__file__).resolve().parents[1] / ".streamlit" / "config.toml"
 

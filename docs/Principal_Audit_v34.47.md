@@ -1,5 +1,7 @@
 # Kromi Cabinet Planner v34.47 - Principal Architecture Audit
 
+Status: the P0 and P1 findings were fixed in v34.48 to v34.55, except C1 (dropped by decision), C13 (open) and the page structure (professionalization plan and rewrite); see docs/Roadmap_Status.md.
+
 Date: 2026-09-22. Scope: the full tree (`pages/`, `engine/`, `db/`, `ui/`, `tools/`, top-level modules, tests, CI, docs, config). Method: static reading plus runtime experiments (pytest, Streamlit AppTest page drives, a live server launch, synthetic data, mock OpenAI server). Nothing in the project was modified. Tags: **[R]** runtime-verified, **[S]** static only.
 
 ---
@@ -250,7 +252,7 @@ Where users get confused [R unless noted]:
 - **P2 - Facades:** `engine/__init__.py` re-exports 109 names that nothing imports; `constants.py` star imports (the cause of the CI gate failure) plus a frozen-surface test that adds friction to every new constant. [S]
 - **P2 - pandas 3 breaks technician category overrides** (`overrides.py:247`: `Invalid value 'high' for dtype 'float64'`, 4 test failures on pandas 3.0.6); PuLP 4 removes the APIs the optimizer uses (827 deprecation warnings). [R]
 - **P3 - Dead code:** `controls_model.py`, `heuristic_product_category(_with_listing)`, `save_overrides`, `invariants.VENDING_TYPES`, `layout.grid_dims`, unused styling constants, page shims `compute_helix_needs`/`apply_operational_mode` kept alive only by a test, the second (unreachable) empty-planning-base guard (2418 / 2463). [S grep-verified]
-- **P3 - Numbering hygiene:** the step-drill override lives only in `kromi_numbering.py` (and includes "stufenfräser", sending a mill to 14); holders (20008 + dim) and accessories (20 + dim) share one variant pool, so the number cannot be decoded back; no test that the code matrix covers `TOOL_CLASS_VALID`; the v34.47 structure-word table says "regenerate" but its generator was never committed (my omission). [S]
+- **P3 - Numbering hygiene:** the step-drill override lives only in `kromi_numbering.py` (and includes "stufenfräser", sending a mill to 14); holders (20008 + dim) and accessories (20 + dim) share one variant pool, so the number cannot be decoded back; no test that the code matrix covers `TOOL_CLASS_VALID`; the v34.47 structure-word table says "regenerate" but its generator was never committed (not committed). [S]
 - **P3 - Comment noise:** 83 version tags and 37 history comments in code. [S]
 
 ---
