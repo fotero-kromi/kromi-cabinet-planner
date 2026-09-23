@@ -28,7 +28,10 @@ byte-identical to v34.59 (synthetic manifest unchanged).
 - CI: a `windows-latest` job (Python 3.11) runs ruff, mypy and the suite;
   reported, not blocking (`continue-on-error`) until it has proven stable.
   Contract in `tests/test_ci_workflow.py`.
-- Verification: see the PR (suite counts from `python tools/check.py --tests`).
+- Verification: 5 new contracts. `python tools/check.py --tests --base v34.59`
+  green: 2,149 passed / 25 skipped / 0 failed (Python 3.11). mypy also green on
+  a fresh Python 3.12 install. `python tools/synthetic_golden.py --check`
+  identical.
 
 ## [v34.59] - Synthetic golden gate, one quality gate, GitHub repository
 
