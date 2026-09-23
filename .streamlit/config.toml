@@ -1,0 +1,33 @@
+# Streamlit configuration for the Kromi Cabinet Planner.
+# Put this file in .streamlit/config.toml next to Home.py.
+
+[theme]
+primaryColor = "#006C52"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F8F5"
+textColor = "#4A4A49"
+font = "sans serif"
+
+[client]
+toolbarMode = "viewer"
+# "none" keeps error messages, types and stack traces (file paths, source
+# lines) out of the browser. The legacy value `false` means "stacktrace".
+showErrorDetails = "none"
+# Hide Streamlit's auto-generated multi-page nav (Home / Kromi / EGC). Navigation
+# is handled by the welcome-page picker cards and the per-page "Back to picker"
+# button, so the built-in list is redundant.
+showSidebarNavigation = false
+
+[browser]
+gatherUsageStats = false
+# Open the browser on the same address the server is bound to.
+serverAddress = "localhost"
+
+[server]
+maxUploadSize = 200
+# Bind to this computer only (v34.48). Streamlit otherwise listens on every
+# network interface, which would let anyone on the network open stored
+# customer runs, change override sets and use the OpenAI key without a login.
+# To share deliberately on a trusted network, start with:
+#   python -m streamlit run Home.py --server.address 0.0.0.0
+address = "localhost"
