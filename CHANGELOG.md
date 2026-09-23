@@ -3,6 +3,44 @@
 
 All notable changes to the Kromi Cabinet Planner are documented here.
 
+## [v34.61] - Tool list, export tables and setting defaults move into the engine
+
+Preparation for the rewrite: the new app will call the same engine functions
+instead of copying page code. Planning results and exports are byte-identical
+to v34.60 (synthetic manifest unchanged).
+
+- `engine/tool_list.py`: building the planning frame from the mapped sheets,
+  moved from the planner page. `ColumnMapping` holds the source column per
+  field; `mapping_collisions`, `rename_map` and `build_tool_list` (rename, tag,
+  clean text, join Tools and PPE, drop blank codes, column defaults, number,
+  stock and year parsing) return what the page used to show as messages
+  (missing columns per sheet, dropped rows) as data, and the page shows them
+  as before. Also `resolve_override_scope`, `distinct_programs`,
+  `assign_supply_points`, `add_classification_audit_columns` and
+  `apply_export_display_columns` (Std_Special, Forced_to_KTC, Restockable).
+- `engine/export_frames.py`: the Summary, Run_Metadata (57 rows plus the
+  Special and fixed-configuration rows), Audit_Summary, Bucket_Compare and the
+  four distribution tables, moved from the page and `ui/exports_panel.py`. Pure:
+  the caller passes the timestamp and every setting (`RunMetadataInputs`).
+- `engine/planning_defaults.py`: every setting default and choice label in one
+  place (`DEFAULTS`, the operation, supply-point, Tools + PPE, year, duplicate
+  and numbering labels, the fixed-configuration machines, the value limits).
+  The sidebar and main-screen controls read them; the new app will too.
+  Labels that already carried a long dash keep it, so the page and the
+  Run_Metadata values are unchanged.
+- `tests/test_deshadow_guard.py`: the page no longer imports the two sizing
+  constants at all; the guards now require zero bare references and one read
+  of each shared default, as the widget's starting value.
+- Verification: 50 new tests (`test_tool_list.py`, `test_export_frames.py`,
+  `test_planning_defaults.py`, `test_page_defaults.py`), red before the
+  modules existed. The synthetic gate is unchanged. Because the technical
+  sheets (Audit_Summary, Bucket_Compare, Dist_*) are not in the gate's
+  default workbook, all four scenarios were also exported with the technical
+  sheets on, before (v34.60) and after: all 64 sheets identical. The private
+  golden gate on a real customer workbook is required before merging.
+  `python tools/check.py --tests`: 2,200 passed / 25 skipped / 0 failed
+  (Python 3.11).
+
 ## [v34.60] - Quality gate passes on fresh installs and on Windows
 
 Hotfix for the gate introduced in v34.59. Planning results and exports are

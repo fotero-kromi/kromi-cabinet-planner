@@ -17,12 +17,14 @@ import streamlit as st
 
 from app_log import log_exception, log_warning
 from engine.build_info import BUILD, build_stamp
-from engine.cabinet_math import SPECIAL_KTC_REASON
 from engine.deck import DeckStats
-from engine.fixed_config import FIXED_MODE, run_meta_rows as fixed_run_meta_rows
+from engine.export_frames import (
+    RunMetadataInputs,
+    run_metadata_rows,
+    summary_frame,
+    takeover_shared_stock,
+)
 from engine.kromi_numbering import augment_for_export
-from engine.routing_rules import classify_standard_special
-from engine.sizing_factors import SP_MODE_REPLICATE
 from engine.takeover import (
     STOCK_COL,
     build_takeover_frames,
@@ -153,117 +155,37 @@ def render(
             return
     st.subheader("Export")
 
-    # Summary sheet: one row per bucket + grand total
-    summary_rows = []
-    for label, p in bucket_plans:
-        summary_rows.append({
-            "Bucket": label,
-            "KTC items": p["ktc_count"],
-            "Kanban items": p["kanban_count"],
-            "Helix refs": p["helix_refs"], "Helix spirals (base)": p["total_spirals"], "Helix spirals (buf)": p["total_spirals_buf"],
-            "Helix cabs (base)": p["helix_cabs_base"], "Helix cabs (buf)": p["helix_cabs"],
-            "Carousel refs": p["carousel_refs"], "Carousel slots (base)": p["car_slots"], "Carousel slots (buf)": p["car_slots_buf"],
-            "Carousel cabs (base)": p["car_cabs_base"], "Carousel cabs (buf)": p["car_cabs"],
-            "Locker A refs": p["locker_a_refs"], "Locker A cabs (base)": p["cabA_base"], "Locker A cabs (buf)": p["cabA"],
-            "Locker B refs": p["locker_b_refs"], "Locker B cabs (base)": p["cabB_base"], "Locker B cabs (buf)": p["cabB"],
-            "Locker C refs": p["locker_c_refs"], "Locker C cabs (base)": p["cabC_base"], "Locker C cabs (buf)": p["cabC"],
-            "Total cabs (base)": p["total_cabs_base"], "Total cabs (buf)": p["total_cabs"],
-        })
-    if len(bucket_plans) > 1:
-        summary_rows.append({
-            "Bucket": "Grand total",
-            "KTC items": grand["ktc_count"],
-            "Kanban items": grand["kanban_count"],
-            "Helix refs": grand["helix_refs"], "Helix spirals (base)": grand["total_spirals"], "Helix spirals (buf)": grand["total_spirals_buf"],
-            "Helix cabs (base)": grand["helix_cabs_base"], "Helix cabs (buf)": grand["helix_cabs"],
-            "Carousel refs": grand["carousel_refs"], "Carousel slots (base)": grand["car_slots"], "Carousel slots (buf)": grand["car_slots_buf"],
-            "Carousel cabs (base)": grand["car_cabs_base"], "Carousel cabs (buf)": grand["car_cabs"],
-            "Locker A refs": grand["locker_a_refs"], "Locker A cabs (base)": grand["cabA_base"], "Locker A cabs (buf)": grand["cabA"],
-            "Locker B refs": grand["locker_b_refs"], "Locker B cabs (base)": grand["cabB_base"], "Locker B cabs (buf)": grand["cabB"],
-            "Locker C refs": grand["locker_c_refs"], "Locker C cabs (base)": grand["cabC_base"], "Locker C cabs (buf)": grand["cabC"],
-            "Total cabs (base)": grand["total_cabs_base"], "Total cabs (buf)": grand["total_cabs"],
-        })
-    df_summary = pd.DataFrame(summary_rows)
-    df_summary["Capacity buffer (%)"] = buf_pct
-
-    # Run metadata sheet
-    _run_meta_rows = [
-        {"Key": "Build",                 "Value": BUILD},
-        {"Key": "Timestamp (UTC)",       "Value": datetime.now(timezone.utc).isoformat(timespec="seconds")},
-        {"Key": "Model",                 "Value": OPENAI_MODEL},
-        {"Key": "Calc mode",             "Value": calc_mode},
-        {"Key": "Operational mode",      "Value": operational_mode},
-        {"Key": "Max carousels (capped mode)", "Value": (int(max_carousels_cap) if op_mode == "Capped" else "")},
-        {"Key": "Supply points",         "Value": n_sp},
-        {"Key": "SP mode",               "Value": sp_mode},
-        {"Key": "Capacity buffer (%)",   "Value": buf_pct},
-        {"Key": "KTC threshold",         "Value": usage_threshold},
-        {"Key": "Helix threshold",       "Value": helix_threshold},
-        {"Key": "Consumption months",    "Value": consumption_period_months},
-        {"Key": "Coverage window (days)","Value": coverage_days},
-        {"Key": "Carousel reserve factor","Value": _plan_cfg.carousel_reserve_factor},
-        {"Key": "Carousel fill ceiling", "Value": _plan_cfg.carousel_fill_ceiling},
-        {"Key": "Min carousel alloc",    "Value": minimum_carousel_allocation},
-        {"Key": "Helix overfill factor", "Value": _plan_cfg.helix_overfill_factor},
-        {"Key": "Pack-hint extraction",  "Value": bool(enable_pack_hint_extraction)},
-        {"Key": "Per-class thresholds", "Value": (", ".join(f"{k}={v:g}" for k, v in sorted(per_class_thresholds.items())) if optional_thresholds_active else "off")},
-        {"Key": "Coverage special (days)", "Value": (int(coverage_days_special) if _split_coverage else "n/a")},
-        {"Key": "Consolidate underused cabinets", "Value": "on" if enable_rebalancer else "off"},
-        {"Key": "Empty-cabinet threshold (%)", "Value": float(underuse_threshold_pct)},
-        {"Key": "Force screws/accessories Kanban", "Value": "on" if force_screws_accessories_kanban else "off"},
-        {"Key": "Regrind handling (Helix +1 spiral)", "Value": "on" if col_regrind else "off"},
-        {"Key": "System type override (Lagersystem)", "Value": "on" if col_systemtyp else "off"},
-        {"Key": "Use Description_2", "Value": "yes" if use_description_2 else "no"},
-        {"Key": "AI fallback", "Value": "on" if use_ai else "off"},
-        {"Key": "Restocking column", "Value": (col_restock or "off")},
-        {"Key": "Restockable categories (rule)", "Value": (", ".join(_restock_categories) if _restock_categories else "off")},
-        {"Key": "Restock buffer compartments", "Value": int(_restock_slots_total)},
-        {"Key": "Bulk routing enabled",  "Value": bool(enable_bulk_routing)},
-        {"Key": "Bulk routed rows",      "Value": vend_stats.get("routed_rows", 0)},
-        {"Key": "Bulk removed spirals",  "Value": vend_stats.get("removed_spirals", 0)},
-        {"Key": "Bulk removed slots",    "Value": vend_stats.get("removed_carousel_slots", 0)},
-        {"Key": "Overrides blocked bulk", "Value": vend_stats.get("overridden_bulk_candidates", 0)},
-        {"Key": "Program→SP mapping",    "Value": "active" if program_mapping_active else "off"},
-        {"Key": "Programmes mapped",     "Value": len(program_to_sp_map) if program_mapping_active else 0},
-        {"Key": "Customer",              "Value": effective_customer},
-        {"Key": "Site",                  "Value": effective_site},
-        {"Key": "Overrides applied",     "Value": ("NO - override database unreadable" if override_store_unavailable else ("yes" if apply_overrides_ui else "no"))},
-        {"Key": "Overrides rows touched","Value": override_stats["rows_touched"]},
-        {"Key": "Overrides stale",       "Value": len(override_stats["unmatched_overrides"])},
-        {"Key": "Overrides invalid",     "Value": len(override_stats["invalid_overrides"])},
-        {"Key": "Listings loaded",       "Value": ", ".join(listings_in_data)},
-        {"Key": "Tools sheet",           "Value": sheet_tools if sheet_tools else "—"},
-        {"Key": "PPE sheet",             "Value": sheet_ppe if sheet_ppe else "—"},
-        {"Key": "Rows before preproc",   "Value": base_info["rows_before"]},
-        {"Key": "Rows after year filter","Value": base_info["rows_after_year_filter"]},
-        {"Key": "Rows after dedup",      "Value": base_info["rows_after_dedup"]},
-        {"Key": "AI batches run",        "Value": ai_batches_run},
-        {"Key": "AI batches failed",     "Value": ai_batches_failed},
-        {"Key": "AI items processed",    "Value": ai_items_run},
-        {"Key": "AI missing responses",  "Value": ai_missing_responses},
-        {"Key": "Input tokens",          "Value": total_in_tokens},
-        {"Key": "Output tokens",         "Value": total_out_tokens},
-        {"Key": "Validation issues",     "Value": "; ".join(validation_issues) if validation_issues else "none"},
-    ]
-    # Special-tools-as-KTC reporting (only when the Standard/Special column is
-    # mapped, so a run without the feature keeps the metadata unchanged). Records
-    # the toggle state and how many rows were classified Special vs forced,
-    # so the toggle's effect is auditable from the file rather than invisible.
-    if "StdSpecial" in work.columns and col_stdspecial:
-        _special_total = int(
-            work["StdSpecial"].map(classify_standard_special).eq("special").sum()
-        )
-        _special_forced_n = int(
-            (work["SystemCategory_Reason"].astype(str) == SPECIAL_KTC_REASON).sum()
-        )
-        _run_meta_rows += [
-            {"Key": "Set special tools as KTC", "Value": "on" if st.session_state.get("ks_special_ktc", False) else "off"},
-            {"Key": "Special rows (marked Special)", "Value": _special_total},
-            {"Key": "Special forced to KTC", "Value": _special_forced_n},
-        ]
-    # Fixed configuration (v34.52): the machines, headroom and fit counts.
-    if op_mode == FIXED_MODE:
-        _run_meta_rows += fixed_run_meta_rows(bucket_plans)
+    # Summary and Run_Metadata sheets (engine/export_frames.py, v34.61).
+    df_summary = summary_frame(bucket_plans, grand, buf_pct)
+    _run_meta_rows = run_metadata_rows(RunMetadataInputs(
+        build=BUILD, timestamp_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        model=OPENAI_MODEL, calc_mode=calc_mode, operational_mode=operational_mode,
+        op_mode=op_mode, max_carousels_cap=max_carousels_cap, n_sp=n_sp, sp_mode=sp_mode,
+        buf_pct=buf_pct, usage_threshold=usage_threshold, helix_threshold=helix_threshold,
+        consumption_period_months=consumption_period_months, coverage_days=coverage_days,
+        plan_cfg=_plan_cfg, minimum_carousel_allocation=minimum_carousel_allocation,
+        enable_pack_hint_extraction=enable_pack_hint_extraction,
+        optional_thresholds_active=optional_thresholds_active,
+        per_class_thresholds=per_class_thresholds, split_coverage=_split_coverage,
+        coverage_days_special=coverage_days_special, enable_rebalancer=enable_rebalancer,
+        underuse_threshold_pct=underuse_threshold_pct,
+        force_screws_accessories_kanban=force_screws_accessories_kanban,
+        col_regrind=col_regrind, col_systemtyp=col_systemtyp,
+        use_description_2=use_description_2, use_ai=use_ai, col_restock=col_restock,
+        restock_categories=_restock_categories, restock_slots_total=_restock_slots_total,
+        enable_bulk_routing=enable_bulk_routing, vend_stats=vend_stats,
+        program_mapping_active=program_mapping_active, program_to_sp_map=program_to_sp_map,
+        effective_customer=effective_customer, effective_site=effective_site,
+        override_store_unavailable=override_store_unavailable,
+        apply_overrides_ui=apply_overrides_ui, override_stats=override_stats,
+        listings_in_data=listings_in_data, sheet_tools=sheet_tools, sheet_ppe=sheet_ppe,
+        base_info=base_info, ai_batches_run=ai_batches_run,
+        ai_batches_failed=ai_batches_failed, ai_items_run=ai_items_run,
+        ai_missing_responses=ai_missing_responses, total_in_tokens=total_in_tokens,
+        total_out_tokens=total_out_tokens, validation_issues=validation_issues,
+        col_stdspecial=col_stdspecial,
+        special_ktc=bool(st.session_state.get("ks_special_ktc", False)),
+    ), work=work, bucket_plans=bucket_plans)
     df_run_meta = pd.DataFrame(_run_meta_rows)
 
     # Meaningful, dated filename (CPlanner_<source>_Result_<date>.xlsx).
@@ -319,8 +241,8 @@ def render(
     _export_ktc_id = str(ktc_id_input or "").strip()
     # Replicate copies share one stock (v34.56); the SP mode and the Program
     # mapping are in the run metadata, so the content key below covers it.
-    _takeover_shared = bool(sp_mode == SP_MODE_REPLICATE and int(n_sp) > 1
-                            and not program_mapping_active)
+    _takeover_shared = takeover_shared_stock(sp_mode, n_sp,
+                                             program_mapping_active=program_mapping_active)
     _export_key = json.dumps(_json_key_safe({
         "run_meta": [r for r in _run_meta_rows if r["Key"] != "Timestamp (UTC)"],
         "bucket_plans": bucket_plans, "override_stats": override_stats,
