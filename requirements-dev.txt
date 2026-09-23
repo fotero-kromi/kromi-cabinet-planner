@@ -1,0 +1,11 @@
+# Development & CI tooling (not needed to run the app).
+# Install with:  pip install -r requirements-dev.txt
+#
+# The app's runtime dependencies are in requirements.txt.
+
+-r requirements.txt
+
+pytest>=8.0
+ruff==0.15.20
+mypy==2.1.0
+pyflakes>=3.2
