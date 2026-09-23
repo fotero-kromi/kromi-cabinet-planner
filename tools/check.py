@@ -68,6 +68,7 @@ BANNED_FOLDED_DIGESTS: frozenset[str] = frozenset({
 #: Names that are ordinary words in lower case and only a name in capitals.
 BANNED_EXACT_DIGESTS: frozenset[str] = frozenset({
     "d2ac5074f36fa05024f4b8a54a6ea014206e0fe059e8f682e971584d6f06d176",
+    "b10d9b161099c0f642245383b8f3e99181695e41b5dd8eaf0a583378a5ec8a1f",
 })
 
 #: Filler words the project does not use, plus the em dash.

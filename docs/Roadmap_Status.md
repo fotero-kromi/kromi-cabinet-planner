@@ -28,7 +28,7 @@ Suite: 2,149 passed / 25 skipped / 0 failed (v34.60). The standard planning flow
 2. **Fit articles into existing machines: done in v34.52.** Demand follows the existing rules; the most used articles first; less used ones flagged when they do not fit; the headroom stays empty; in this mode the sidebar keeps only the relevant controls.
 3. **Takeover (2026-09-22):** every takeover is customer property, one sheet per supply point; maximum = allocated compartments x packaging unit, filled up to the maximum; lockers ignored for now.
 4. **Stock as a demand hint (2026-09-23):** where consumption is missing, the customer's stock is assumed to cover about 3 months; used only to move articles into free Helix space (switchable), never to change routing or other placements.
-5. **Repository and tooling (2026-09-23):** the code lives in a private GitHub repository; development moves to Claude Code on the web (the owner works from three computers). Release zips remain available through `tools/package_release.py`.
+5. **Repository and tooling (2026-09-23):** the code lives in a private GitHub repository; development moves to Claude Code on the web. Release zips remain available through `tools/package_release.py`.
 6. **Rewrite prototype (2026-09-23):** a branch `rewrite/fastapi-react` prototypes the app without Streamlit (`docs/Rewrite_Decision.md`). Stack and hosting to be confirmed by the owner before the vertical slice; Streamlit stays on `main` until parity.
 
 ## Next
