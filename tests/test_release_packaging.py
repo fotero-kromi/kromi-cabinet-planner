@@ -18,7 +18,7 @@ def _tree(root):
         "requirements.txt": "x", "requirements-dev.txt": "x", "pyproject.toml": "x",
         "run.bat": "x", ".env.example": "x", ".gitignore": "x",
         "styling.py": "x", "presentation.py": "x", "optimization.py": "x",
-        "controls_model.py": "x", "PROJECT_REVIEW_v34.02.md": "x",
+        "controls_model.py": "x",
         ".streamlit/config.toml": "x", ".streamlit/secrets.toml": "SECRET",
         ".github/workflows/ci.yml": "x",
         "engine/__init__.py": "x", "engine/plan.py": "x",

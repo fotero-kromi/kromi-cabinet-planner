@@ -18,7 +18,7 @@ from pathlib import Path
 
 #: Top-level files that ship.
 ALLOWED_FILES: tuple[str, ...] = (
-    "Home.py", "README.md", "CHANGELOG.md", "PROJECT_REVIEW_v34.02.md",
+    "Home.py", "README.md", "CHANGELOG.md",
     "requirements.txt", "requirements-dev.txt", "pyproject.toml", "run.bat",
     ".env.example", ".gitignore",
     "styling.py", "presentation.py", "optimization.py", "controls_model.py",

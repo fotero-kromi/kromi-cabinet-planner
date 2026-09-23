@@ -31,7 +31,7 @@ def conn(tmp_path):
 def _overrides_df():
     return pd.DataFrame([
         {"code": "A100", "listing": "Tools", "size_category_override": "M",
-         "note": "too big for Carousel", "reviewed_by": "fab"},
+         "note": "too big for Carousel", "reviewed_by": "tester"},
         {"code": "B200", "listing": "Tools", "cabinet_type_override": "Helix"},
     ])
 
@@ -40,13 +40,13 @@ def _overrides_df():
 
 def test_save_and_get_round_trip(conn):
     set_id = save_override_set(
-        conn, customer="PlantA", site="P1", reviewer_name="fab",
+        conn, customer="PlantA", site="P1", reviewer_name="tester",
         notes="post-review fixes", overrides_df=_overrides_df(),
     )
     got = get_override_set(conn, set_id)
     assert got["customer"] == "PlantA"
     assert got["site"] == "P1"
-    assert got["reviewer_name"] == "fab"
+    assert got["reviewer_name"] == "tester"
     assert got["notes"] == "post-review fixes"
 
     ov = got["overrides"]
@@ -227,7 +227,7 @@ def _updated_df():
     """A second, different correction frame for the same scope."""
     return pd.DataFrame([
         {"code": "A100", "listing": "Tools", "size_category_override": "L",
-         "note": "revised after re-review", "reviewed_by": "fab"},
+         "note": "revised after re-review", "reviewed_by": "tester"},
         {"code": "C300", "listing": "Tools", "cabinet_type_override": "Carousel"},
     ])
 
@@ -243,7 +243,7 @@ def test_update_keeps_same_set_id_and_count(conn):
 
     ok = update_override_set(
         conn, set_id, customer="PlantA", site="P1",
-        reviewer_name="fab", notes="round 2", overrides_df=_updated_df(),
+        reviewer_name="tester", notes="round 2", overrides_df=_updated_df(),
     )
     assert ok is True
 
@@ -260,7 +260,7 @@ def test_update_replaces_rows(conn):
     )
     update_override_set(
         conn, set_id, customer="PlantA", site="P1",
-        reviewer_name="fab", notes=None, overrides_df=_updated_df(),
+        reviewer_name="tester", notes=None, overrides_df=_updated_df(),
     )
     ov = override_set_as_dataframe(conn, set_id)
     by_code = {r["code"]: r for r in ov.to_dict("records")}
@@ -277,17 +277,17 @@ def test_update_refreshes_metadata(conn):
     )
     update_override_set(
         conn, set_id, customer="PlantA", site="P1",
-        reviewer_name="fab", notes="second", overrides_df=_updated_df(),
+        reviewer_name="tester", notes="second", overrides_df=_updated_df(),
     )
     got = get_override_set(conn, set_id)
-    assert got["reviewer_name"] == "fab"
+    assert got["reviewer_name"] == "tester"
     assert got["notes"] == "second"
 
 
 def test_update_missing_set_returns_false_and_creates_nothing(conn):
     ok = update_override_set(
         conn, 9999, customer="PlantA", site="P1",
-        reviewer_name="fab", notes=None, overrides_df=_updated_df(),
+        reviewer_name="tester", notes=None, overrides_df=_updated_df(),
     )
     assert ok is False
     assert list_override_sets(conn, customer="PlantA", site="P1") == []
@@ -301,7 +301,7 @@ def test_update_round_trips_through_apply_overrides(conn):
     )
     update_override_set(
         conn, set_id, customer="PlantA", site="P1",
-        reviewer_name="fab", notes=None, overrides_df=_updated_df(),
+        reviewer_name="tester", notes=None, overrides_df=_updated_df(),
     )
     wide = override_set_as_dataframe(conn, set_id)
     assert list(wide.columns) == OVERRIDE_COLUMNS
@@ -323,8 +323,8 @@ def test_update_round_trips_through_apply_overrides(conn):
 
 def test_label_full():
     row = {"set_id": 5, "created_at": "2026-06-23T11:48:30",
-           "override_count": 2, "reviewer_name": "fab"}
-    assert format_override_set_label(row) == "#5 · 2026-06-23 11:48 · 2 tool(s) · fab"
+           "override_count": 2, "reviewer_name": "tester"}
+    assert format_override_set_label(row) == "#5 · 2026-06-23 11:48 · 2 tool(s) · tester"
 
 
 def test_label_without_reviewer():
