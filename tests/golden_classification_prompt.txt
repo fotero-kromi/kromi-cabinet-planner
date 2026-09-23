@@ -1,0 +1,80 @@
+You are an expert in cutting tools, machining tooling, and industrial PPE (personal protective equipment).
+
+Each input item has a "listing" field: "Tools" or "PPE". Use it as a strong prior.
+
+For each item, return:
+- product_category: one of [inserts, drills, mills, reamers, holders, screws, accessories, boring_bars, ppe, other]
+- tool_class: finer-grained subclass. One of:
+  * For inserts: turning_insert, milling_insert, drilling_insert
+  * For drills: solid_carbide_drill, indexable_drill, hss_drill, tap
+  * For mills: solid_end_mill, shell_mill, face_mill, thread_mill
+  * For reamers: reamer
+  * For boring_bars: boring_bar
+  * For holders: turning_holder, milling_holder, collet
+  * For screws: screw
+  * For accessories: wrench, abrasive_disc, abrasive_belt, grinding_wheel, accessory
+  * For ppe: ppe
+  * Fallback: other
+- size_category: exactly one of [S, M, L, XL, XXL, XXLS, XLS]
+- pack_units: integer, usually 1 or 10 (or null if uncertain)
+- confidence: "high" (clear evidence in description/code), "medium" (inferred from supplier+context), or "low" (guess)
+- reason: ONE short sentence (max 15 words) pointing at the specific field that led to the classification. Examples:
+  * "ISO insert code CNMG in description"
+  * "Seco WS-grade carbide insert code"
+  * "Description starts with FO (Foret = drill in French)"
+  * "Supplier Guhring specializes in carbide drills"
+  * "No clear category indicators in description or code"
+
+Listing rule (CRITICAL):
+- If listing == "PPE", strongly prefer product_category = ppe. Only fall back to another category if the item is clearly NOT PPE (e.g., a cleaning chemical or a misfiled tool).
+- If listing == "Tools", never output product_category = ppe.
+
+Insert rule (CRITICAL, Tools only):
+- If listing == "Tools" and the text contains insert-like wording such as insert, wendeplatte, wendeschneidplatte, plaquette, or ISO insert codes, classify as inserts even if the same text also contains drilling, milling, turning, bohrer, fraesen, drehen, etc.
+- Examples: "Insert for drilling" -> inserts | "Wendeplatte : Bohrer" -> inserts
+
+Rules for pack_units if missing/incorrect:
+- inserts -> 10
+- drills, mills, reamers -> 1
+- holders, screws, accessories, boring_bars -> 1
+- ppe -> 1 (items are usually counted individually; a box of gloves should still be pack=1 unless clearly sold as a pack)
+
+Important insert hints (Tools only):
+- ISO-style insert codes: CCMT, CNMG, CNMM, CNMA, CNGA, DCGT, DNMG, DNMM, DNMA, DNGA, VNMG, VCGT, VBMT, RCMT, SPGT, TCMT, TPKN, APKT, ADKT, LNMT, LNHT, TCKT, ANCX, WXCU, QPMT
+- Inserts default: size_category=S, pack_units=10
+
+Supplier brand hints (Tools only):
+The supplier_code field may contain a cutting-tool manufacturer name. Common brands and what they typically make:
+- Seco, Sandvik, Iscar, Mitsubishi, Walter, Kennametal, Sumitomo, Korloy, Tungaloy, Widia: these are major cutting-tool brands. They produce inserts (most volume), drills, mills, reamers, boring bars, and toolholders.
+- Seco proprietary patterns often include grade suffixes like -TP1500, -TS2050, -CP500, -F40M, -MK1500, or standalone codes like WS-grade, MM-grade, MS-grade.
+- Iscar uses IC8xxx / IC9xxx grade suffixes (IC8250, IC9350, IC907, etc.).
+- Sandvik uses long numeric codes like 5322-425-04, 5412-028-041, 170.3-852.
+
+When the supplier_code is one of these brands AND the description has no clear category word (no drill/bohrer/foret/fraise/mill/holder/halter/etc.) AND no ISO insert code is present, the item is MOST LIKELY an insert (inserts are by far the highest-volume product line at all these brands). Default to product_category=inserts with pack_units=10 in that case, unless the description explicitly says otherwise.
+
+However, ALWAYS trust explicit category words in the description over the supplier hint:
+- "Sandvik CoroDrill ..." -> drills (CoroDrill is Sandvik's drill line; the word "drill" wins)
+- "Seco Jabro endmill ..." -> mills (endmill wins)
+- "Iscar HELIDO holder ..." -> holders (holder wins)
+- "Sandvik insert ..." or "Seco TS2050" with no other context -> inserts
+
+PPE size hints:
+- earplugs, safety glasses, masks, gloves -> S
+- safety boots, helmets/hard hats -> XL
+- coveralls, full-body protection -> XXL
+- unknown PPE -> M
+
+Multilingual category hints:
+- screws: screw, schraube, schrauben, vis, vite, viti, tornillo, tornillos, parafuso, parafusos
+- accessories: accessory, accessories, access, zubehör, zubehoer, spare, ersatz, clamp, klemm
+- ppe: glove/gant/handschuh, goggle/lunette/brille, earplug/bouchon/ohrstöpsel, mask/masque/maske, boot/chaussure/stiefel, helmet/casque/helm/casco, coverall/combinaison
+
+If truly uncertain:
+- product_category=other (Tools) or ppe (PPE)
+- size_category=L (Tools) or M (PPE)
+- pack_units=null
+
+Return exactly one result per input item, preserving the exact row_id.
+
+Input items JSON:
+[{"row_id": "1", "listing": "Tools", "code": "CNMG 120408", "product_category_current": "inserts", "description": "turning insert", "description_2": "second line", "supplier_code": "seco", "pack_units_current": "10", "size_category_current": "M"}, {"row_id": "2", "listing": "Tools", "code": "FORET Ø6.0", "product_category_current": "drills", "description": "carbide drill ä", "description_2": "", "supplier_code": "guhring", "pack_units_current": "1", "size_category_current": "S"}, {"row_id": "42", "listing": "PPE", "code": "EARPLUG-X", "product_category_current": "ppe", "description": "ear protection", "description_2": "", "supplier_code": "3M", "pack_units_current": "1", "size_category_current": "S"}]

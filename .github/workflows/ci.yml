@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  quality:
+    name: Undefined-name scan and tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Test the declared support floor: run.bat and the README state
+        # Python 3.10+, and the pandas pin (<3.0) keeps 3.10 installable.
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      # The release gate used by every shipped build: zero undefined names.
+      # v34.49: ruff's F821 rule replaces a grep over pyflakes output that
+      # also matched pyflakes' star-import notice ("unable to detect undefined
+      # names") and therefore failed every run before any test executed.
+      - name: Undefined-name gate (ruff F821)
+        run: ruff check --select F821 .
+
+      - name: Run tests (pytest)
+        run: pytest
+
+      # Blocking lint gate. Correctness rules across the whole tree (syntax
+      # errors, undefined names, redefinitions), and unused-import
+      # cleanliness tree-wide (v34.21). Package __init__ re-export hubs and
+      # the tests keep their per-file exemptions in pyproject.toml; every
+      # other module is import-clean, verified by a consumer analysis before
+      # the last five findings were removed.
+      - name: Lint gate (ruff)
+        run: |
+          ruff check --select E9,F63,F7,F82,F811 .
+          ruff check --select F401 .
+
+      # Blocking type gate (v34.19): the engine and the data layer are
+      # mypy-clean and stay that way. Scope and strictness live in
+      # pyproject.toml.
+      - name: Type gate (mypy)
+        run: mypy
+
+      # Known-vulnerability report for the declared dependencies (v34.49).
+      # Reported, not blocking: an advisory without a released fix must not
+      # stop every build; findings are reviewed at each release.
+      - name: Dependency audit (pip-audit)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+  # v34.60: the same gates on Windows, where users run the app. Plan digests
+  # (os.linesep) and source reads (cp1252) broke there before this build.
+  # Reported, not blocking, until the job has been green for a few releases.
+  windows:
+    name: Tests on Windows (Python 3.11)
+    runs-on: windows-latest
+    continue-on-error: true
+    # bash stops at the first failing line of a multi-line step; PowerShell
+    # would report only the exit code of the last one.
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint gate (ruff)
+        run: |
+          ruff check --select F821 .
+          ruff check --select E9,F63,F7,F82,F811 .
+          ruff check --select F401 .
+
+      - name: Type gate (mypy)
+        run: mypy
+
+      - name: Run tests (pytest)
+        run: pytest

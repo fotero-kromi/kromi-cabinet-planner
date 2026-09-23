@@ -1,0 +1,35 @@
+# Kromi Cabinet Planner - Python dependencies
+# Supported Python: 3.10 - 3.12 (CI runs all three).
+#
+# Install: pip install -r requirements.txt
+# run.bat keeps an installation in sync automatically: it reinstalls whenever
+# this file changes (tools/ensure_deps.py).
+
+# Core web framework. Floor 1.54: earlier releases carry CVE-2026-33682
+# (unauthenticated Windows SSRF leaking the NTLM hash); the app also needs
+# st.fragment and the width="stretch" API of recent releases.
+streamlit>=1.54,<2.0
+
+# Data
+pandas>=2.0,<3.0
+# Excel read/write - pandas needs these explicitly
+openpyxl>=3.1
+xlsxwriter>=3.1
+# Hardened XML parsing for uploaded workbooks (openpyxl uses it when present)
+defusedxml>=0.7
+
+# Arrow serialization for Streamlit dataframes (streamlit requires it)
+pyarrow>=14.0
+
+# Charts in Streamlit
+altair>=5.0
+
+# AI integration (upper bound: a new major is adopted deliberately)
+openai>=1.30,<4.0
+python-dotenv>=1.0
+
+# PowerPoint generation (KROMI presentation deck)
+python-pptx>=0.6.21
+
+# MILP solver (optional, drives the experimental optimizer panel)
+pulp>=2.7,<4.0

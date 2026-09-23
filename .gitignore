@@ -1,0 +1,58 @@
+# --- Secrets -----------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+
+# --- Runtime data (created by the app on use) --------------------------------
+runs/
+catalogs/
+overrides/
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+build/
+dist/
+
+# --- Test / lint / type-check caches ----------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Editor / OS noise -------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- SQLite database (keep OUT of git AND off cloud-synced folders) ----------
+*.db
+*.db-journal
+*.db-wal
+.kromi_cabinet_planner/
+
+# --- Per-build archives (use git tags/commits instead of zip snapshots) ------
+*.zip
+
+# --- Virtual environments ----------------------------------------------------
+venv/
+.venv/
+env/
+
+# --- Windows / OneDrive noise ------------------------------------------------
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# --- Customer data (v34.59): customer workbooks and exports never enter git --
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+tests/fixtures/
+.claude/settings.local.json

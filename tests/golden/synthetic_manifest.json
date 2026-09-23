@@ -1,0 +1,72 @@
+{
+  "scenarios": {
+    "capped_replicate": {
+      "buckets": {
+        "rows": 3,
+        "sha256": "39658777566bf58ef79900809022ab12dec4b9a3deb9ac17c527886a7e0d6598"
+      },
+      "grand": {
+        "rows": 1,
+        "sha256": "a603fbf993808232c0de67adb1cbcd51144fe2344270b7451fee0e10f549b0b1"
+      },
+      "pertool": {
+        "rows": 720,
+        "sha256": "2f8cd61c8bc9f16786560ab84d2c4ab8c900c84728a5e28b92a1169f19320d7e"
+      },
+      "workbook": {
+        "sha256": "7d850c8c14e760a34ebd4759112f8900578ff1957b95265e71a0424b30245f13"
+      }
+    },
+    "fixed_program_stock": {
+      "buckets": {
+        "rows": 3,
+        "sha256": "a454fdd3cb8a709f930448b2624c3f703730424e068f37ffe6c699dbb1a26e1f"
+      },
+      "grand": {
+        "rows": 1,
+        "sha256": "26000e1f3d3fb57566bdd736ac5de7e994461d42b587a4fead51b93e168491d8"
+      },
+      "pertool": {
+        "rows": 364,
+        "sha256": "45e2500d508e61cce8ebf0a2a8edda74677d86766c51ce262c5a066a28812d10"
+      },
+      "workbook": {
+        "sha256": "746fb7f02e166f0cc98a63c68eb78736478041ff6afb4a870e165637e726e3a0"
+      }
+    },
+    "numbering_only": {
+      "buckets": {
+        "rows": 0,
+        "sha256": "ecce951d1dc7f28b5b67b892f5b15b570433c1f768cc93fd7779a7392c2aa0ae"
+      },
+      "grand": {
+        "rows": 0,
+        "sha256": "f056b3dad6282feb2134173ec619e5814ed61181e971dbeb8f92781e5b31bff5"
+      },
+      "pertool": {
+        "rows": 0,
+        "sha256": "920da6036eaba2a09899319218c68d33309ad16a04b90979c4b0838406d33f94"
+      },
+      "workbook": {
+        "sha256": "86237e4c1d1277344727af408305fbcabe486a1b2a173d7c26fe3972ebaeb137"
+      }
+    },
+    "standard": {
+      "buckets": {
+        "rows": 2,
+        "sha256": "a36170f83a8bfd71041a3e478e91de0a7501be3058664f19bda71eccf3175683"
+      },
+      "grand": {
+        "rows": 1,
+        "sha256": "3797c5b78905ee508598d688216770293629b3cee52d434fe23adaa810dd63e2"
+      },
+      "pertool": {
+        "rows": 360,
+        "sha256": "d1c94ef0972d94c66e7f16f9d56779f3e7685480f8058ee0b56e51480aeadea3"
+      },
+      "workbook": {
+        "sha256": "1f33c55f7da3df88b9610268e3a3a927a70a0e3cbaa760f913cf4dea0bce110b"
+      }
+    }
+  }
+}
