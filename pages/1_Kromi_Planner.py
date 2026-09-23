@@ -46,7 +46,6 @@ from engine.constants import (
 
 # Engine modules — text utilities extracted to kromi_app/engine/text_utils.py.
 from engine.text_utils import (
-    guess_column,
     norm,
     _fmt_seconds,
 )
@@ -105,10 +104,9 @@ from engine.classification import is_weak_category, merge_classification_results
 # Pure function; calls engine.text_utils + engine.classification.
 from engine.boundary import apply_pre_ai_heuristics, apply_post_ai_safety
 from engine.preprocessing import prepare_planning_base
-from engine.takeover import STOCK_COL, guess_stock_column
+from engine.takeover import STOCK_COL
 
 from engine.colmap import (
-    deconflict_defaults,
     headers_look_misplaced,
     suggest_header_row,
     build_colmap_prompt,
@@ -118,9 +116,6 @@ from engine.colmap import (
     resolve_required_default,
     resolve_required_stored,
     reset_mapping_state_on_file_change,
-    CODE_SYNONYMS,
-    DESCRIPTION_SYNONYMS,
-    CONSUMPTION_SYNONYMS,
     NOT_AVAILABLE as NOT_AVAIL,
 )
 
@@ -190,7 +185,7 @@ from engine.distribution import (
 # Classifier-quality validation (overrides-based correction-rate analysis).
 from engine.evaluation import evaluate_classification
 from engine.run_fingerprint import FingerprintInputs, compute_run_fingerprint
-from engine.plan import run_plan, PlanParams, PlanResult, BaseCounts
+from engine.plan import run_plan, PlanParams, PlanResult
 from engine.plan_config import PlanConfig
 from engine.run_prefs import get_file_prefs, save_file_prefs, file_key_for
 from engine.kromi_numbering import (
@@ -212,6 +207,16 @@ from engine.planning_defaults import (
     YEAR_MODE_LABELS,
     label_index,
     token_for,
+)
+from engine.column_suggest import raw_guesses, suggest_columns
+from engine.run_settings import (
+    RunSettings,
+    build_plan_params,
+    calc_mode_from_label,
+    effective_settings,
+    program_mapping_active as _program_mapping_active,
+    restock_slots_total,
+    sp_mode_from_label,
 )
 from engine.tool_list import (
     ColumnMapping,
@@ -1436,7 +1441,7 @@ with st.sidebar:
     )
 
 # Translate the radio choice into an internal constant
-sp_mode = SP_MODE_REPLICATE if sp_mode_ui.startswith("Replicate") else SP_MODE_PARTITION
+sp_mode = sp_mode_from_label(sp_mode_ui)
 
 # Bundle the two runtime sizing factors into one frozen config, built once from
 # the UI values; every reader below reads from it, not a mutable global.
@@ -2003,83 +2008,42 @@ if ai_colmap:
         st.info(f"AI mapping unavailable ({exc}). Falling back to automatic header matching.")
         ai_guess = {}
 
-default_code = ai_guess.get("Code") or guess_column(df, CODE_SYNONYMS)
-default_prod = ai_guess.get("ProductCategory") or guess_column(df, ["ProductCategory", "Produktkategorie", "Warengruppe", "Category"])
-default_desc1 = ai_guess.get("Description") or guess_column(df, DESCRIPTION_SYNONYMS)
-default_desc2 = ai_guess.get("Description_2") or guess_column(df, ["Description_2", "Description2", "Langtext", "Zusatztext"])
-default_sup = ai_guess.get("SupplierCode") or guess_column(df, ["SupplierCode", "Lieferant", "Hersteller", "Manufacturer", "Supplier"])
-default_cons = ai_guess.get("Consumption_pcs") or guess_column(df, CONSUMPTION_SYNONYMS)
-default_pack = ai_guess.get("PackUnits") or guess_column(df, ["PackUnits", "VPE", "VE", "Pack", "Packsize", "Packaging"])
-default_size = ai_guess.get("SizeCategory") or guess_column(df, ["SizeCategory", "Size", "Größe", "Groesse", "KTC Size"])
-default_year = ai_guess.get("Year") or guess_column(df, ["Year", "Jahr", "FiscalYear", "PeriodYear"])
-default_program = ai_guess.get("Program") or guess_column(df, ["Program", "Programme", "Programma", "Programa", "Project", "Projekt", "Area", "Bereich", "Section"])
-default_restock = ai_guess.get("Restocking") or guess_column(df, ["Restocking", "Restock", "Restockable", "Nachfüllen", "Nachfuellen", "Nachschub", "Refill", "Auffüllen", "Auffuellen"])
-default_site = ai_guess.get("Site") or guess_column(df, ["Site", "Sites", "Standort", "Plant", "Factory", "Usine", "Werk"])
-default_stdspecial = ai_guess.get("StdSpecial") or guess_column(df, [
-    "Standard/Special", "Standard / Special", "StandardSpecial", "Std/Special",
-    "Standard/Sonder", "Standard / Sonder", "Art", "Tooltype", "Tool type",
-    "Typ", "Type", "Klasse", "Class", "Kategorie",
-])
-default_dims = ai_guess.get("PackageDimensions") or guess_column(df, [
-    "PackageDimensions", "Package dimensions", "Packagedimensions", "Package_Dimensions",
-    "Abmessungen", "Abmessung", "Maße", "Masse", "Dimensions", "Dimension",
-    "Verpackungsmaße", "Verpackungsmasse", "Größe LxBxH", "LxBxH", "L x B x H",
-    "Package Size", "Packmaß", "Packmasse",
-])
-default_regrind = ai_guess.get("Regrind") or guess_column(df, [
-    "Regrind", "Re-grind", "Regrindable", "Regrinding", "Reground",
-    "Nachschleifbar", "Nachschleifen", "Nachschliff", "Schleifbar",
-    "Wiederaufbereitbar", "Aufbereitbar",
-])
-default_systemtyp = ai_guess.get("SystemTyp") or guess_column(df, [
-    "SystemTyp", "System type", "Systemtyp", "System Typ", "Lagersystem",
-    "Lagersystem (KTC, usw)", "Storage system", "Vending system", "System",
-])
-# Current stock for the takeover sheets (v34.56). Minimum / maximum / safety
-# levels and stock locations are never taken (engine.takeover).
-default_stock = guess_stock_column(df)
+# Suggested columns (engine/column_suggest.py, v34.62): the AI proposal, else
+# the synonym match; the stock column has its own rule (never a min, max,
+# safety level or location). Optional defaults never take a column a required
+# field (or an earlier optional field) already uses (v34.50, audit C11), so
+# "Year" does not grab "Jahresverbrauch". A user's explicit pick is untouched;
+# the conflict guard below remains the safety net.
+_raw_guess = raw_guesses(df, ai_guess)
+default_code = _raw_guess["Code"]
+default_desc1 = _raw_guess["Description"]
+default_cons = _raw_guess["Consumption_pcs"]
 
-# v34.50 (audit C11): optional auto-detected defaults never take a column a
-# required field (or an earlier optional field) already uses. Substring
-# synonyms stay (German compounds), but "Year" no longer grabs the
-# consumption column "Jahresverbrauch", nor "Standard/Special" the code
-# column "Artikel". A user's explicit pick is untouched; the conflict guard
-# below remains the safety net.
+
 def _effective_required(key: str, default: Optional[str]) -> Optional[str]:
     _v = st.session_state.get(key)
     return _v if _v in cols else default
 
 
-_deconflicted = deconflict_defaults(
-    {
-        "Code": _effective_required("cm_code", default_code),
-        "Description": _effective_required("cm_desc1", default_desc1),
-        "Consumption_pcs": _effective_required("cm_cons", default_cons),
-    },
-    {
-        "ProductCategory": default_prod, "Year": default_year,
-        "Description_2": default_desc2, "Program": default_program,
-        "Restocking": default_restock, "SupplierCode": default_sup,
-        "SizeCategory": default_size, "Site": default_site,
-        "StdSpecial": default_stdspecial, "PackUnits": default_pack,
-        "PackageDimensions": default_dims, "Regrind": default_regrind,
-        "SystemTyp": default_systemtyp, "Stock_pcs": default_stock,
-    },
-)
-default_prod = _deconflicted["ProductCategory"]
-default_year = _deconflicted["Year"]
-default_desc2 = _deconflicted["Description_2"]
-default_program = _deconflicted["Program"]
-default_restock = _deconflicted["Restocking"]
-default_sup = _deconflicted["SupplierCode"]
-default_size = _deconflicted["SizeCategory"]
-default_site = _deconflicted["Site"]
-default_stdspecial = _deconflicted["StdSpecial"]
-default_pack = _deconflicted["PackUnits"]
-default_dims = _deconflicted["PackageDimensions"]
-default_regrind = _deconflicted["Regrind"]
-default_systemtyp = _deconflicted["SystemTyp"]
-default_stock = _deconflicted["Stock_pcs"]
+_suggested = suggest_columns(df, ai_guess, required={
+    "Code": _effective_required("cm_code", default_code),
+    "Description": _effective_required("cm_desc1", default_desc1),
+    "Consumption_pcs": _effective_required("cm_cons", default_cons),
+})
+default_prod = _suggested["ProductCategory"]
+default_year = _suggested["Year"]
+default_desc2 = _suggested["Description_2"]
+default_program = _suggested["Program"]
+default_restock = _suggested["Restocking"]
+default_sup = _suggested["SupplierCode"]
+default_size = _suggested["SizeCategory"]
+default_site = _suggested["Site"]
+default_stdspecial = _suggested["StdSpecial"]
+default_pack = _suggested["PackUnits"]
+default_dims = _suggested["PackageDimensions"]
+default_regrind = _suggested["Regrind"]
+default_systemtyp = _suggested["SystemTyp"]
+default_stock = _suggested["Stock_pcs"]
 
 # Once the user hides optional columns, optional mapping switches to manual
 # mode: any earlier optional assignment is cleared and auto-detection is
@@ -2369,10 +2333,8 @@ st.caption(
 
 # Program → Supply Point mapping
 program_to_sp_map: Dict[str, int] = {}
-has_program_col = col_program is not None and "Program" in work.columns
-program_mapping_active = bool(
-    has_program_col and int(n_supply_points) > 1 and op_mode != "NumberingOnly"
-)
+program_mapping_active = _program_mapping_active(
+    work, _mapping, n_supply_points=int(n_supply_points), op_mode=op_mode)
 
 if program_mapping_active:
     st.subheader("Program → Supply Point mapping")
@@ -3070,46 +3032,35 @@ if _stored_source_cls:
          for _c, _rec in _stored_source_cls.items()),
         key=lambda t: str(t[0]),
     ))
-_plan_params = PlanParams(
-    n_supply_points=int(n_supply_points),
-    sp_mode=sp_mode,
-    consumption_period_months=float(consumption_period_months),
-    coverage_days=coverage_days,
-    coverage_days_special=coverage_days_special,
-    usage_threshold=usage_threshold,
-    per_class_thresholds=tuple(sorted(per_class_thresholds.items())),
+# The run's settings, after the mode rules, and the planner parameters built
+# from them (engine/run_settings.py, v34.62).
+_run_settings = effective_settings(RunSettings(
+    use_description_2=bool(use_description_2), year_mode=year_mode, dedup_mode=dedup_mode,
+    ktc_threshold=usage_threshold,
     optional_thresholds_active=bool(optional_thresholds_active),
-    force_screws_accessories_kanban=bool(force_screws_accessories_kanban),
-    manual_size_fixes=tuple(sorted(
-        (str(_k), str(_v)) for _k, _v in _manual_size_fix.items())),
-    stored_classifications=_stored_cls,
-    helix_threshold=helix_threshold,
-    dims_mapped=bool(col_dims),
-    minimum_carousel_allocation=int(minimum_carousel_allocation),
-    plan_cfg=_plan_cfg,
-    system_type_mapped=bool(col_systemtyp),
+    per_class_thresholds=tuple(sorted(per_class_thresholds.items())),
+    insert_pack_units=insert_default_pack_units, helix_threshold=helix_threshold,
+    consumption_months=consumption_period_months,
+    helix_overfill_factor=helix_single_spiral_overfill_factor_ui,
+    min_carousel_allocation=minimum_carousel_allocation,
+    coverage_days=coverage_days, coverage_days_special=coverage_days_special,
     special_ktc=bool(st.session_state.get("ks_special_ktc", False)),
-    stdspecial_mapped=bool(col_stdspecial),
-    enable_bulk_routing=bool(enable_bulk_routing),
-    op_mode=op_mode,
-    restock_categories=_restock_categories,
-    calc_mode_separated=calc_mode.startswith("Separated"),
-    capacity_buffer_pct=float(capacity_buffer_pct),
-    enable_rebalancer=bool(enable_rebalancer),
-    underuse_threshold_pct=float(underuse_threshold_pct),
-    max_carousels_cap=max_carousels_cap,
-    fixed_machines=fixed_machines,
-    fixed_headroom_pct=float(fixed_headroom_pct),
-    fixed_allow_spill=bool(fixed_allow_spill),
-    fixed_stock_promotion_months=float(fixed_stock_months),
-    base_counts=BaseCounts(
-        rows_before=int(base_info["rows_before"]),
-        rows_after_year_filter=int(base_info["rows_after_year_filter"]),
-        rows_after_dedup=int(base_info["rows_after_dedup"]),
-        consumption_before=base_info.get("consumption_before"),
-        consumption_after_year=base_info.get("consumption_after_year"),
-        consumption_after_dedup=base_info.get("consumption_after_dedup"),
-    ),
+    carousel_reserve_factor=carousel_reserve_factor_ui,
+    carousel_fill_ceiling=carousel_fill_ceiling_ui,
+    enable_rebalancer=bool(enable_rebalancer), underuse_threshold_pct=underuse_threshold_pct,
+    capacity_buffer_pct=capacity_buffer_pct, restock_categories=_restock_categories,
+    pack_hint_extraction=bool(enable_pack_hint_extraction),
+    bulk_routing=bool(enable_bulk_routing),
+    force_screws_kanban=bool(force_screws_accessories_kanban),
+    n_supply_points=int(n_supply_points), sp_mode=sp_mode,
+    calc_mode=calc_mode_from_label(calc_mode), op_mode=op_mode,
+    max_carousels=max_carousels_cap, fixed_headroom_pct=fixed_headroom_pct,
+    fixed_allow_spill=fixed_allow_spill, fixed_stock_promotion=fixed_stock_months > 0,
+    fixed_stock_months=fixed_stock_months, fixed_machines=fixed_machines,
+), stdspecial_mapped=bool(col_stdspecial), both_listings=both_listings)
+_plan_params = build_plan_params(
+    _run_settings, mapping=_mapping, base_info=base_info,
+    manual_size_fixes=_manual_size_fix, stored_classifications=_stored_cls,
 )
 
 import hashlib as _hashlib
@@ -3247,10 +3198,7 @@ else:
 
 # Restocking summary (v34.24)
 _ri = _plan_result.restock_info
-_restock_slots_total = (
-    int(_ri.get("slots_carousel", 0)) + int(_ri.get("slots_lockerA", 0))
-    + int(_ri.get("slots_lockerB", 0)) + int(_ri.get("slots_lockerC", 0))
-)
+_restock_slots_total = restock_slots_total(_ri)
 if _restock_slots_total > 0:
     _n_flagged = int(_ri.get("provided_true", 0)) + int(_ri.get("rule_true", 0))
     _locker_slots = _restock_slots_total - int(_ri.get("slots_carousel", 0))

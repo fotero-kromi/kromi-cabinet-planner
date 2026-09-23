@@ -75,6 +75,8 @@ One line per module, taken from the module docstrings; `engine/` is pure
 | `plan.py` | Composition layer: the deterministic `run_plan(work, overrides, params)` pipeline |
 | `tool_list.py` | Building the tool list from the mapped sheets: mapping check, renaming, blank codes, supply points, classification columns |
 | `planning_defaults.py` | The setting defaults and choice labels every front end reads |
+| `run_settings.py` | The typed settings of one run, the mode rules, and the planner parameters built from them |
+| `column_suggest.py` | The column each planning field starts from (synonyms, AI proposal, no shared columns) |
 | `preprocessing.py` | Planning base prep: dedup, year filter, pack units, restock flag normalization |
 | `boundary.py` | Deterministic boundary heuristics between preprocessing and the plan |
 | `demand.py` | Demand arithmetic and the base KTC/Kanban routing decision |
