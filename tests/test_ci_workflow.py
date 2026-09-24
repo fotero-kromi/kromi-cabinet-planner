@@ -119,3 +119,24 @@ def test_the_generated_client_cannot_drift_from_the_back_end():
     job = _new_app_jobs()["frontend"]
     assert "npm run gen:api" in job
     assert "git diff --exit-code -- src/api/schema.d.ts" in job
+
+
+def test_the_docker_setup_is_tested_end_to_end_in_a_browser():
+    # PR C: the image is built and started exactly as the owner starts it, and a
+    # real browser runs the synthetic standard scenario against port 8080.
+    job = _new_app_jobs()["e2e"]
+    assert "runs-on: ubuntu-latest" in job
+    assert "docker compose up -d --build --wait" in job
+    assert "pip install -r e2e/requirements.txt" in job
+    assert "playwright install --with-deps chromium" in job
+    assert "pytest e2e" in job
+    assert "KROMI_E2E_URL: http://127.0.0.1:8080" in job
+    # When it fails: the screenshots and the containers' logs are kept.
+    assert re.search(r"if:\s*failure\(\)[\s\S]*docker compose logs", job)
+    assert re.search(r"if:\s*failure\(\)[\s\S]*actions/upload-artifact@v4", job)
+    assert re.search(r"if:\s*always\(\)[\s\S]*docker compose down -v", job)
+
+
+def test_the_browser_test_tools_are_pinned():
+    lines = (REPO / "e2e" / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    assert any(re.fullmatch(r"playwright==\d+\.\d+\.\d+", line) for line in lines)

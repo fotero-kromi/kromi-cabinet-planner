@@ -1,0 +1,50 @@
+# The new app on one PC: start with
+#   docker compose up -d --build
+# then open http://localhost:8080 (docs/New_App_Docker.md). Works with Docker
+# Desktop and Rancher Desktop (dockerd / moby engine).
+
+# A fixed name: the database volume is the same wherever this folder is unpacked.
+name: kromi-planner
+
+services:
+  db:
+    # PostgreSQL major 18; the tag follows its newest minor release.
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kromi
+      # Only reachable inside Docker's own network; set KROMI_DB_PASSWORD (letters
+      # and digits) before the first start to use another password.
+      POSTGRES_PASSWORD: ${KROMI_DB_PASSWORD:-kromi}
+      POSTGRES_DB: kromi
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kromi -d kromi"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    # No "ports": the database is not reachable from outside Docker.
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: kromi-planner-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      KROMI_DATABASE_URL: postgresql+psycopg://kromi:${KROMI_DB_PASSWORD:-kromi}@db:5432/kromi
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  db-data:

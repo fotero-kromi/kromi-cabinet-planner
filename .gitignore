@@ -60,3 +60,9 @@ tests/fixtures/
 # New app front end (frontend/): packages and build output
 node_modules/
 frontend/*.tsbuildinfo
+
+# Local-only build helpers (never committed)
+docker/.session/
+
+# Browser test screenshots (e2e/)
+e2e/artifacts/

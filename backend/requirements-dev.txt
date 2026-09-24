@@ -8,3 +8,5 @@ pytest>=8.0
 httpx2>=2.13
 ruff==0.15.20
 mypy==2.1.0
+# Reads compose.yaml in the Docker setup checks.
+pyyaml>=6.0
