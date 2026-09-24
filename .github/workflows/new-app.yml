@@ -64,3 +64,44 @@ jobs:
       # Streamlit app's manifest), the PostgreSQL round trip and the migrations.
       - name: Tests (pytest)
         run: pytest
+
+  frontend:
+    name: Front end (Node 22)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (locked)
+        run: npm ci
+
+      # The back-end tests check openapi.json against the served schema; this
+      # step checks that the committed client was generated from that file.
+      - name: Generated API client is current
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/api/schema.d.ts
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Types (TypeScript)
+        run: npm run typecheck
+
+      - name: Unit tests (Vitest)
+        run: npm test
+
+      - name: Production build
+        run: npm run build

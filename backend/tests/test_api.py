@@ -3,6 +3,7 @@ against a real PostgreSQL, with the parity oracle at the end."""
 import pytest
 from fastapi.testclient import TestClient
 
+from engine.classification_tables import PC_VALID
 from engine.planning_defaults import DEFAULTS, LIMITS, OP_MODE_LABELS
 from kromi_api import config
 from kromi_api.main import create_app
@@ -97,6 +98,13 @@ def test_defaults_come_from_the_engine(client):
     assert body["header_row"] == DEFAULTS.header_row
     assert body["limits"]["coverage_days"] == list(LIMITS["coverage_days"])
     assert body["labels"]["op_mode"] == {"": OP_MODE_LABELS[""]}
+
+
+def test_defaults_offer_the_restock_categories_of_the_engine(client):
+    # The settings screen offers the same categories as the Streamlit page's
+    # "Restockable categories (rule)" choice (engine PC_VALID, sorted).
+    body = client.get(f"{API}/settings/defaults").json()
+    assert body["choices"]["restock_categories"] == sorted(PC_VALID)
 
 
 def _run(client, catalog_bytes, settings=None):

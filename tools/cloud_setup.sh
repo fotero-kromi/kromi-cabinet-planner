@@ -4,9 +4,10 @@
 # their own environment, so this only runs when CLAUDE_CODE_REMOTE is "true".
 # It never fails the session.
 #
-# Rewrite branch: also installs the new app's back-end dependencies and starts
-# a local PostgreSQL with an empty "kromi_test" database for its tests (the
-# PostgreSQL the cloud image provides; CI tests on PostgreSQL 18).
+# Rewrite branch: also installs the new app's back-end dependencies and its
+# front-end packages (npm ci, from the lock file), and starts a local
+# PostgreSQL with an empty "kromi_test" database for its tests (the PostgreSQL
+# the cloud image provides; CI tests on PostgreSQL 18).
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
@@ -20,6 +21,11 @@ pip_install() {
 pip_install requirements-dev.txt
 if [ -f backend/requirements-dev.txt ]; then
   pip_install backend/requirements-dev.txt
+fi
+
+if [ -f frontend/package-lock.json ] && command -v npm >/dev/null 2>&1; then
+  (cd frontend && npm ci --no-audit --no-fund >/dev/null 2>&1) \
+    || echo "Front-end install failed; run: cd frontend && npm ci"
 fi
 
 # Local PostgreSQL for the back-end tests: trust authentication, listening on

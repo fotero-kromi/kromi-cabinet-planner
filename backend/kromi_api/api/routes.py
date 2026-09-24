@@ -23,6 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from engine.build_info import BUILD
+from engine.classification_tables import PC_VALID
 from engine.planning_defaults import (
     CALC_MODE_LABELS,
     DEDUP_MODE_LABELS,
@@ -130,7 +131,8 @@ def defaults() -> DefaultsOut:
         limits=dict(LIMITS),
         labels={"op_mode": {OP_STANDARD: OP_MODE_LABELS[OP_STANDARD]},
                 "sp_mode": SP_MODE_LABELS, "calc_mode": CALC_MODE_LABELS,
-                "year_mode": YEAR_MODE_LABELS, "dedup_mode": DEDUP_MODE_LABELS})
+                "year_mode": YEAR_MODE_LABELS, "dedup_mode": DEDUP_MODE_LABELS},
+        choices={"restock_categories": sorted(PC_VALID)})
 
 
 # ---- workbooks -------------------------------------------------------------------------

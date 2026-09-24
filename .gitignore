@@ -56,3 +56,7 @@ $RECYCLE.BIN/
 *.csv
 tests/fixtures/
 .claude/settings.local.json
+
+# New app front end (frontend/): packages and build output
+node_modules/
+frontend/*.tsbuildinfo

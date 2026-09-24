@@ -54,6 +54,8 @@ class DefaultsOut(BaseModel):
     export: ExportIn
     limits: dict[str, tuple[float | None, float | None]]
     labels: dict[str, dict[str, str]]
+    #: allowed values of list settings (``restock_categories``)
+    choices: dict[str, list[str]]
 
 
 class RunCreate(BaseModel):
