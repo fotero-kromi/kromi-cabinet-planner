@@ -27,6 +27,15 @@ python tools/synthetic_golden.py --update    # only after an intended result cha
 python tools/package_release.py . kromi_app_vXX.YY.zip   # release zip (allow-list)
 ```
 
+The new app (branch `rewrite/fastapi-react`, `docs/Rewrite_Decision.md`):
+
+```bash
+pip install -r backend/requirements-dev.txt  # back-end dependencies
+python tools/check_new_app.py                # back end: ruff, mypy, pytest (PostgreSQL)
+cd backend && alembic upgrade head           # migrate the database in KROMI_DATABASE_URL
+python -m uvicorn --app-dir backend kromi_api.main:app   # run the API (repository root)
+```
+
 ## Non-negotiable rules
 
 1. **Argue before implementing** anything correctness-sensitive or architectural:

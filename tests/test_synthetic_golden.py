@@ -11,6 +11,7 @@ If a change is meant to alter results, regenerate the manifest with
 ``python tools/synthetic_golden.py --update`` and say why in the CHANGELOG.
 """
 from io import BytesIO
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -75,6 +76,50 @@ def test_the_plan_digest_ignores_the_platform_line_ending(monkeypatch):
     unix = sg.frame_digest(frame)
     monkeypatch.setattr(sg.os, "linesep", "\r\n")
     assert sg.frame_digest(frame) == unix
+
+
+def _result(**over):
+    base = dict(
+        work=pd.DataFrame({"Code": ["A", "B"], "Spirals_needed": [1, 2]}),
+        bucket_plans=[("All", {"ktc_count": 2, "total_consumption": 3.5})],
+        grand={"ktc_count": 2, "total_consumption": 3.5}, restock_info={"slots_carousel": 0},
+        vend_stats={"routed_rows": 0, "by_family": {}}, override_stats={"rows_touched": 0},
+        validation_issues=[], split_coverage=False, listings=(), rebalance_audit=[],
+        sp_conservation=[],
+    )
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def test_the_plan_result_digest_is_stable_and_sees_every_part():
+    """Rewrite parity: the planner's own result, independent of the SQLite archive."""
+    d = sg.plan_result_digest(_result())
+    assert d == sg.plan_result_digest(_result()) and d["rows"] == 2
+    changed_work = pd.DataFrame({"Code": ["A", "B"], "Spirals_needed": [1, 3]})
+    for over in ({"work": changed_work},
+                 {"bucket_plans": [("All", {"ktc_count": 3, "total_consumption": 3.5})]},
+                 {"grand": {"ktc_count": 2, "total_consumption": 3.25}},
+                 {"restock_info": {"slots_carousel": 1}},
+                 {"vend_stats": {"routed_rows": 1, "by_family": {}}},
+                 {"override_stats": {"rows_touched": 1}},
+                 {"validation_issues": ["x"]}, {"split_coverage": True},
+                 {"listings": ("PPE", "Tools")}, {"rebalance_audit": [{"moved": 1}]},
+                 {"sp_conservation": ["SP 1 ok"]}):
+        assert sg.plan_result_digest(_result(**over)) != d, over
+
+
+def test_the_plan_result_digest_refuses_unknown_types():
+    with pytest.raises(TypeError):
+        sg.plan_result_digest(_result(grand={"x": object()}))
+
+
+def test_every_planning_scenario_records_its_plan_result():
+    scenarios = sg.load_manifest()["scenarios"]
+    for name, spec in sg.SCENARIOS.items():
+        if spec["download"] == "plan workbook":
+            assert "plan_result" in scenarios[name], name
+        else:
+            assert "plan_result" not in scenarios[name], name
 
 
 @pytest.mark.parametrize("scenario", list(sg.SCENARIOS))

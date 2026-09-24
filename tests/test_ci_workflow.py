@@ -50,6 +50,41 @@ def _jobs():
     return {b.split(":", 1)[0]: b for b in blocks if b.strip()}
 
 
+def _triggers(text: str) -> dict:
+    """'push' / 'pull_request' -> the branches listed for it."""
+    out = {}
+    for event in ("push", "pull_request"):
+        m = re.search(rf"^  {event}:\s*\n    branches:\s*\[([^\]]*)\]", text, flags=re.M)
+        out[event] = [b.strip().strip("'\"") for b in m.group(1).split(",")] if m else []
+    return out
+
+
+def test_the_gate_also_runs_on_the_rewrite_branch():
+    # The rewrite branch keeps the Streamlit app and its gate until parity.
+    for event, branches in _triggers(_text()).items():
+        assert "main" in branches and "rewrite/fastapi-react" in branches, event
+
+
+NEW_APP = REPO / ".github" / "workflows" / "new-app.yml"
+
+
+def test_the_new_app_workflow_runs_on_the_rewrite_branch():
+    for event, branches in _triggers(NEW_APP.read_text(encoding="utf-8")).items():
+        assert branches == ["rewrite/fastapi-react"], event
+
+
+def test_the_new_app_back_end_tests_run_against_postgresql_18():
+    t = NEW_APP.read_text(encoding="utf-8")
+    assert re.search(r"image:\s*postgres:18\s*$", t, flags=re.M)  # major 18, latest minor
+    assert "KROMI_TEST_DATABASE_URL: postgresql+psycopg://" in t
+    assert "KROMI_EXPECT_POSTGRES_MAJOR: \"18\"" in t
+    assert re.search(r"""python-version:\s*["']?3\.12["']?""", t)
+    for step in ("pip install -r requirements-dev.txt", "ruff check .", "mypy", "pytest"):
+        assert step in t, step
+    assert "working-directory: backend" in t
+    assert "sqlite" not in t.lower()
+
+
 def test_a_windows_job_runs_the_suite():
     # v34.60: users run the app on Windows, where the suite broke on line
     # endings and cp1252. The job reports without blocking until it is proven.
