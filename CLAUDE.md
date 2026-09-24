@@ -39,6 +39,9 @@ python tools/export_openapi.py               # after an API change: frontend/ope
 cd frontend && npm ci                        # front-end packages (Node 22), from the lock file
 cd frontend && npm run gen:api               # regenerate the TypeScript client from openapi.json
 cd frontend && npm run dev                   # front end on port 5173, forwards /api to port 8000
+docker compose up -d --build                 # the whole new app on http://localhost:8080 (docs/New_App_Docker.md)
+pip install -r e2e/requirements.txt          # browser test tools, then: python -m playwright install chromium
+python -m pytest e2e                         # browser test against the app on port 8080 (KROMI_E2E_URL)
 ```
 
 ## Non-negotiable rules

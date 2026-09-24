@@ -2,9 +2,10 @@
 
 Date: 2026-09-23. Status: the owner decided to prototype a rewrite on a branch
 (`rewrite/fastapi-react`) and confirmed the stack, the database and where it
-runs (owner decisions below). The vertical slice is in progress: the back end
-(PR A) and the front end (PR B) are done; the Docker setup and the browser
-end-to-end tests (PR C) are next.
+runs (owner decisions below). The vertical slice is complete with PR C: back
+end (PR A), front end (PR B), Docker setup and browser end-to-end test (PR C).
+Next: the front-end refactor, then the redesign from approved mockups
+(decisions of 2026-09-24 below).
 
 ## Why
 
@@ -88,7 +89,13 @@ result, and `plan_result` is regenerated with `--update` on this branch.
      supply point assignment (a run that needs it fails with the list of
      programmes), per-class thresholds, the PPE sheet, AI, corrections and
      restoring an earlier run.
-   - PR C: Docker setup and browser end-to-end tests.
+   - PR C: Docker setup and browser end-to-end tests. `compose.yaml` starts
+     the app and PostgreSQL 18 with one command on port 8080 (127.0.0.1 only);
+     the back end serves the built front end, so the app is one address. CI
+     builds and starts exactly this setup and runs a browser through the
+     synthetic standard scenario (`e2e/`); the downloaded workbook must have
+     the manifest's digest, and a run must survive a restart. Windows guide
+     for Docker Desktop and Rancher Desktop: `docs/New_App_Docker.md`.
 2. Screen by screen to parity. Engine fixes ship from `main` and reach the branch
    by merge.
 
@@ -126,3 +133,19 @@ by either stack); FastAPI + React about 28 to 37 in total; NiceGUI about 19 to 2
    generated from the Streamlit app.
 8. The slice is delivered in three PRs into `rewrite/fastapi-react`: A back
    end and parity, B front end, C Docker and end-to-end tests.
+
+## Owner decisions (2026-09-24): the front-end redesign
+
+1. Before any other operation mode is built, the front end is redesigned as
+   operation-first guided flows: each operation shows only its own fields,
+   advanced settings sit in a side panel with their defaults, results are shown
+   in tabs.
+2. Order: PR C, then a refactor PR, then a stop. The refactor keeps every
+   result and screen behaviour unchanged (the front-end tests and the
+   end-to-end workbook digest stay as they are) and prepares the redesign:
+   - the settings form is driven by one description per setting (kind, label,
+     help, group, advanced or not, the operation modes it applies to, when it
+     shows), rendered by one generic form instead of a hand-laid page;
+   - the screens are split into small reusable components (file drop, sheet
+     picker, mapping grid, settings form, totals, article table, run status).
+3. The redesign starts only from mockups the owner has approved.
