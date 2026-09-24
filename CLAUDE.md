@@ -31,9 +31,14 @@ The new app (branch `rewrite/fastapi-react`, `docs/Rewrite_Decision.md`):
 
 ```bash
 pip install -r backend/requirements-dev.txt  # back-end dependencies
-python tools/check_new_app.py                # back end: ruff, mypy, pytest (PostgreSQL)
+python tools/check_new_app.py                # back end (ruff, mypy, pytest on PostgreSQL) and front end
 cd backend && alembic upgrade head           # migrate the database in KROMI_DATABASE_URL
 python -m uvicorn --app-dir backend kromi_api.main:app   # run the API (repository root)
+python tools/check_new_app.py --frontend     # front end only: client, lint, types, tests, build
+python tools/export_openapi.py               # after an API change: frontend/openapi.json
+cd frontend && npm ci                        # front-end packages (Node 22), from the lock file
+cd frontend && npm run gen:api               # regenerate the TypeScript client from openapi.json
+cd frontend && npm run dev                   # front end on port 5173, forwards /api to port 8000
 ```
 
 ## Non-negotiable rules

@@ -2,7 +2,9 @@
 
 Date: 2026-09-23. Status: the owner decided to prototype a rewrite on a branch
 (`rewrite/fastapi-react`) and confirmed the stack, the database and where it
-runs (owner decisions below). The vertical slice is in progress.
+runs (owner decisions below). The vertical slice is in progress: the back end
+(PR A) and the front end (PR B) are done; the Docker setup and the browser
+end-to-end tests (PR C) are next.
 
 ## Why
 
@@ -77,7 +79,15 @@ result, and `plan_result` is regenerated with `--update` on this branch.
      defaults) and v34.62 (column suggestions, run settings) moved the page
      logic the slice needs into the engine, byte-identical.
    - PR A: back end (service layer, PostgreSQL, API) and the parity oracle.
-   - PR B: front end (screens, generated client, unit tests).
+   - PR B: front end (screens, generated client, unit tests). Four steps:
+     upload, sheet and columns, settings, run and results with the workbook
+     download. The TypeScript client is generated from `frontend/openapi.json`,
+     which a back-end test keeps equal to the served schema; the schema carries
+     an API version, not the engine build, so a release on `main` does not
+     change it. Not in the slice: the other operation modes, the Program to
+     supply point assignment (a run that needs it fails with the list of
+     programmes), per-class thresholds, the PPE sheet, AI, corrections and
+     restoring an earlier run.
    - PR C: Docker setup and browser end-to-end tests.
 2. Screen by screen to parity. Engine fixes ship from `main` and reach the branch
    by merge.

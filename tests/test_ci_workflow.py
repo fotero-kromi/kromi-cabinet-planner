@@ -95,3 +95,27 @@ def test_a_windows_job_runs_the_suite():
     assert re.search(r"^    continue-on-error:\s*true", job, flags=re.M)
     for step in ("requirements-dev.txt", "pytest", "mypy", "ruff check"):
         assert step in job, step
+
+
+def _new_app_jobs():
+    body = NEW_APP.read_text(encoding="utf-8").split("\njobs:\n", 1)[1]
+    blocks = re.split(r"^  (?=[\w-]+:\s*$)", body, flags=re.M)
+    return {b.split(":", 1)[0]: b for b in blocks if b.strip()}
+
+
+def test_the_new_app_front_end_is_checked():
+    job = _new_app_jobs()["frontend"]
+    assert "working-directory: frontend" in job
+    assert re.search(r"""node-version:\s*["']?22["']?""", job)
+    assert "cache-dependency-path: frontend/package-lock.json" in job
+    # A locked install, then lint, types, unit tests and the production build.
+    for step in ("npm ci", "npm run lint", "npm run typecheck", "npm test", "npm run build"):
+        assert step in job, step
+
+
+def test_the_generated_client_cannot_drift_from_the_back_end():
+    # The back-end tests check frontend/openapi.json against the served schema;
+    # the front-end job regenerates the client from it and fails on any change.
+    job = _new_app_jobs()["frontend"]
+    assert "npm run gen:api" in job
+    assert "git diff --exit-code -- src/api/schema.d.ts" in job
