@@ -34,8 +34,6 @@ from engine.constants import (
     LOCKER_A_CAP,
     LOCKER_B_CAP,
     LOCKER_C_CAP,
-    CAROUSEL_RESERVE_FACTOR as _DEFAULT_RESERVE_FACTOR,
-    HELIX_SINGLE_SPIRAL_OVERFILL_FACTOR as _DEFAULT_OVERFILL_FACTOR,
     LISTING_TOOLS,
     LISTING_PPE,
     SP_MODE_PARTITION,
@@ -48,12 +46,7 @@ from engine.constants import (
 
 # Engine modules — text utilities extracted to kromi_app/engine/text_utils.py.
 from engine.text_utils import (
-    clean_code_cell,
-    clean_text_cell,
-    guess_column,
     norm,
-    parse_number_series,
-    parse_year_series,
     _fmt_seconds,
 )
 
@@ -111,10 +104,9 @@ from engine.classification import is_weak_category, merge_classification_results
 # Pure function; calls engine.text_utils + engine.classification.
 from engine.boundary import apply_pre_ai_heuristics, apply_post_ai_safety
 from engine.preprocessing import prepare_planning_base
-from engine.takeover import CATEGORY_TEXT_COL, STOCK_COL, guess_stock_column
+from engine.takeover import STOCK_COL
 
 from engine.colmap import (
-    deconflict_defaults,
     headers_look_misplaced,
     suggest_header_row,
     build_colmap_prompt,
@@ -124,9 +116,6 @@ from engine.colmap import (
     resolve_required_default,
     resolve_required_stored,
     reset_mapping_state_on_file_change,
-    CODE_SYNONYMS,
-    DESCRIPTION_SYNONYMS,
-    CONSUMPTION_SYNONYMS,
     NOT_AVAILABLE as NOT_AVAIL,
 )
 
@@ -196,16 +185,59 @@ from engine.distribution import (
 # Classifier-quality validation (overrides-based correction-rate analysis).
 from engine.evaluation import evaluate_classification
 from engine.run_fingerprint import FingerprintInputs, compute_run_fingerprint
-from engine.plan import run_plan, PlanParams, PlanResult, BaseCounts
+from engine.plan import run_plan, PlanParams, PlanResult
 from engine.plan_config import PlanConfig
 from engine.run_prefs import get_file_prefs, save_file_prefs, file_key_for
-from engine.routing_rules import classify_standard_special, is_regrind
 from engine.kromi_numbering import (
     build_article_setup,
     order_article_setup,
     resolve_article_system,
 )
 from engine.workbook import build_article_setup_workbook
+from engine.planning_defaults import (
+    CALC_MODE_LABELS,
+    DEDUP_MODE_LABELS,
+    DEFAULTS,
+    FIXED_MACHINE_KINDS,
+    FIXED_MAX_SUPPLY_POINTS,
+    NUMBERING_SYSTEM_LABELS,
+    OP_MODE_LABELS,
+    OP_STANDARD,
+    SP_MODE_LABELS,
+    YEAR_MODE_LABELS,
+    label_index,
+    token_for,
+)
+from engine.column_suggest import raw_guesses, suggest_columns
+from engine.run_settings import (
+    RunSettings,
+    build_plan_params,
+    calc_mode_from_label,
+    effective_settings,
+    program_mapping_active as _program_mapping_active,
+    restock_slots_total,
+    sp_mode_from_label,
+)
+from engine.tool_list import (
+    ColumnMapping,
+    add_classification_audit_columns,
+    apply_export_display_columns,
+    assign_supply_points,
+    build_tool_list,
+    distinct_programs,
+    effective_mapping,
+    mapping_collisions,
+    resolve_override_scope,
+    scope_value,
+    unassigned_programs,
+)
+from engine.export_frames import (
+    audit_frame,
+    bucket_compare_frame,
+    distribution_counts,
+    distribution_volume,
+    listings_in_data as _listings_in_data,
+)
 from engine.export_safety import csv_safe_frame
 from app_log import log_exception
 from engine.invariants import check_kromi_uniqueness
@@ -220,13 +252,11 @@ from engine.fixed_config import (
 # Fixed configuration (v34.52). The label is the selectbox option; the keys
 # below are the sidebar controls that do not apply in that mode (hidden
 # there, their values kept for the other modes).
-_FIXED_MODE_LABEL = "Fixed configuration (existing machines)"
+_FIXED_MODE_LABEL = OP_MODE_LABELS[FIXED_MODE]
 _FIXED_HIDDEN_KEYS = ("ks_fill_ceiling", "ks_rebalancer", "ks_empty_cab",
                       "ks_buffer", "ks_calc_mode", "ks_max_carousels")
-_FIXED_MACHINE_KINDS = (("helix", "Helix", 1), ("carousel", "Carousel", 1),
-                        ("locker_a", "Locker A", 0), ("locker_b", "Locker B", 0),
-                        ("locker_c", "Locker C", 0))
-_FIXED_MAX_SP = 10
+_FIXED_MACHINE_KINDS = FIXED_MACHINE_KINDS
+_FIXED_MAX_SP = FIXED_MAX_SUPPLY_POINTS
 _FIXED_KEYS = ("ks_fixed_headroom", "ks_fixed_spill", "ks_fixed_stock_promo",
                "ks_fixed_stock_months") + tuple(
     f"ks_fixed_{_k}_{_sp}" for _sp in range(1, _FIXED_MAX_SP + 1)
@@ -275,7 +305,7 @@ from ui.ai_calls import (
 # plan config's runtime sizing factors are imported under an
 # _engine_ alias and wrapped in a shim below that forwards the current value; the
 # rest are imported directly.
-from engine.cabinet_math import SPECIAL_KTC_REASON, compute_helix_needs as _engine_compute_helix_needs, apply_operational_mode as _engine_apply_operational_mode
+from engine.cabinet_math import compute_helix_needs as _engine_compute_helix_needs, apply_operational_mode as _engine_apply_operational_mode
 
 
 def _arrow_safe(df: pd.DataFrame) -> pd.DataFrame:
@@ -1003,7 +1033,7 @@ with st.sidebar:
         "KTC / Kanban threshold (pieces per month)",
         key="ks_ktc_threshold",
         min_value=0.0,
-        value=1.0,
+        value=DEFAULTS.ktc_threshold,
         step=0.1,
         help=(
             "Items below this monthly piece rate are routed to Kanban "
@@ -1082,7 +1112,7 @@ with st.sidebar:
         "Insert default packing unit",
         key="ks_insert_pack",
         min_value=1,
-        value=10,
+        value=DEFAULTS.insert_pack_units,
         step=1,
         help=(
             "Inserts are standardised to this many pieces per pack for sizing "
@@ -1096,7 +1126,7 @@ with st.sidebar:
         "Helix threshold (packs per month)",
         key="ks_helix_threshold",
         min_value=0.0,
-        value=6.0,
+        value=DEFAULTS.helix_threshold,
         step=0.5,
         help="Items above this monthly pack rate go to Helix (spiral dispensing); below go to Carousel (slot stockpiles).",
     )
@@ -1105,7 +1135,7 @@ with st.sidebar:
         "Consumption period in months",
         key="ks_consumption_months",
         min_value=1.0,
-        value=12.0,
+        value=DEFAULTS.consumption_months,
         step=1.0,
         help="How many months the consumption figures cover. 12 for annual, 3 for quarter, 1 for monthly.",
     )
@@ -1114,7 +1144,7 @@ with st.sidebar:
         "Helix single-spiral overfill factor",
         key="ks_overfill",
         min_value=1.0,
-        value=_DEFAULT_OVERFILL_FACTOR,
+        value=DEFAULTS.helix_overfill_factor,
         step=0.01,
         help="Allow one spiral to hold up to capacity x this factor before adding a second spiral.",
     )
@@ -1123,7 +1153,7 @@ with st.sidebar:
         "Minimum Carousel compartments per KTC item",
         key="ks_min_carousel",
         min_value=1,
-        value=3,
+        value=DEFAULTS.min_carousel_allocation,
         step=1,
         help="Every KTC item routed to Carousel gets at least this many compartments. Protects against stockouts on refill day. Truly low-volume items should be filtered to Kanban via the KTC threshold.",
     )
@@ -1132,17 +1162,17 @@ with st.sidebar:
     if _std_special_mapped:
         coverage_days = st.number_input(
             "On-machine stock coverage (standard, in days)",
-            min_value=1, max_value=90, value=20, step=1, key="cov_days_standard",
+            min_value=1, max_value=90, value=DEFAULTS.coverage_days, step=1, key="cov_days_standard",
             help="Days of stock between refills for tools marked Standard. Affects sizing only, not the KTC/Kanban split.",
         )
         coverage_days_special = st.number_input(
             "On-machine stock coverage (special, in days)",
-            min_value=1, max_value=90, value=20, step=1, key="cov_days_special",
+            min_value=1, max_value=90, value=DEFAULTS.coverage_days_special, step=1, key="cov_days_special",
             help="Days of stock between refills for tools marked Special (from the mapped Standard/Special column).",
         )
         st.checkbox(
             "Set special tools as KTC",
-            value=False, key="ks_special_ktc",
+            value=DEFAULTS.special_ktc, key="ks_special_ktc",
             help=(
                 "Force every tool marked Special (in the mapped Standard/Special "
                 "column) onto a vending machine regardless of its consumption. "
@@ -1155,7 +1185,7 @@ with st.sidebar:
     else:
         coverage_days = st.number_input(
             "On-machine stock coverage (days)",
-            min_value=1, max_value=90, value=20, step=1, key="cov_days_standard",
+            min_value=1, max_value=90, value=DEFAULTS.coverage_days, step=1, key="cov_days_standard",
             help="Days of stock to keep in the cabinet between refills. Affects sizing only, not KTC/Kanban split. Map a Standard/Special column to split this into two values.",
         )
         coverage_days_special = coverage_days
@@ -1165,7 +1195,7 @@ with st.sidebar:
         key="ks_reserve",
         min_value=0.05,
         max_value=2.00,
-        value=_DEFAULT_RESERVE_FACTOR,
+        value=DEFAULTS.carousel_reserve_factor,
         step=0.05,
         help="Multiplier on Target_packs when sizing Carousel stockpiles. Lower for fast replenishment, higher for deep buffer.",
     )
@@ -1178,7 +1208,7 @@ with st.sidebar:
         _keep_widget_state(_FIXED_HIDDEN_KEYS)
         carousel_fill_ceiling_ui = 1.0
         enable_rebalancer = False
-        underuse_threshold_pct = float(st.session_state.get("ks_empty_cab", 30.0))
+        underuse_threshold_pct = float(st.session_state.get("ks_empty_cab", DEFAULTS.underuse_threshold_pct))
         capacity_buffer_pct = 0.0
         st.caption(
             "Fixed configuration: the headroom set with the machines replaces "
@@ -1190,7 +1220,7 @@ with st.sidebar:
             key="ks_fill_ceiling",
             min_value=0.50,
             max_value=1.00,
-            value=1.00,
+            value=DEFAULTS.carousel_fill_ceiling,
             step=0.05,
             help="Fraction of a Carousel's physical slots the plan may fill before opening the next cabinet. 1.00 packs cabinets fully; lower values leave operational headroom per cabinet at the cost of more cabinets.",
         )
@@ -1198,7 +1228,7 @@ with st.sidebar:
         enable_rebalancer = st.checkbox(
             "Consolidate underused cabinets",
             key="ks_rebalancer",
-            value=True,
+            value=DEFAULTS.enable_rebalancer,
             help="When a cabinet ends up below the empty-cabinet threshold, try to move its items into other cabinets with headroom. The audit shows what moved.",
         )
 
@@ -1207,7 +1237,7 @@ with st.sidebar:
             key="ks_empty_cab",
             min_value=5.0,
             max_value=80.0,
-            value=30.0,
+            value=DEFAULTS.underuse_threshold_pct,
             step=5.0,
             help="If the last cabinet of a type is below this occupation, the rebalancer tries to absorb its items elsewhere.",
             disabled=not enable_rebalancer,
@@ -1218,7 +1248,7 @@ with st.sidebar:
             key="ks_buffer",
             min_value=0.0,
             max_value=200.0,
-            value=15.0,
+            value=DEFAULTS.capacity_buffer_pct,
             step=5.0,
             help="Extra capacity on top of calculated need. Applied to spirals, stockpiles and locker items before the final cabinet count.",
         )
@@ -1229,21 +1259,21 @@ with st.sidebar:
     enable_pack_hint_extraction = st.checkbox(
         "Extract pack sizes from descriptions (qte 50, carton de 60, ...)",
         key="ks_pack_hint",
-        value=True,
+        value=DEFAULTS.pack_hint_extraction,
         help="Scans descriptions for packaging hints before falling back to category defaults. Only fills PackUnits that would otherwise default to 1.",
     )
 
     enable_bulk_routing = st.checkbox(
         "Route bulk-consumable families out of vending (abrasives, paint cups, tapes, wipes)",
         key="ks_bulk_routing",
-        value=False,
+        value=DEFAULTS.bulk_routing,
         help="Tags abrasive discs, paint cups, tapes, wipes and sealants as Bulk/Kanban and removes their spirals/stockpiles from the vending plan. These belong on shelf, not in the machine.",
     )
 
     force_screws_accessories_kanban = st.checkbox(
         "Set screws and accessories as Kanban",
         key="ks_force_screws",
-        value=False,
+        value=DEFAULTS.force_screws_kanban,
         help="Forces every item classified as screws or accessories into Kanban, regardless of consumption rate.",
     )
 
@@ -1255,7 +1285,7 @@ with st.sidebar:
         key="ks_n_sp",
         min_value=1,
         max_value=10,
-        value=1,
+        value=DEFAULTS.n_supply_points,
         step=1,
         help="Physical supply locations in the plant. When greater than 1, items are split per supply point per the mode below.",
     )
@@ -1263,11 +1293,8 @@ with st.sidebar:
     sp_mode_ui = st.radio(
         "Supply-point mode",
         key="ks_sp_mode",
-        options=[
-            "Replicate — each item at every SP at 1/N consumption (realistic default)",
-            "Partition — each item at ONE SP only, LPT balanced by consumption",
-        ],
-        index=0,
+        options=list(SP_MODE_LABELS.values()),
+        index=label_index(SP_MODE_LABELS, DEFAULTS.sp_mode),
         help=(
             "Replicate: the same item is stocked at every supply point; consumption is divided by N. "
             "Partition: each item lives at one supply point only (rare; for highly area-specific tooling)."
@@ -1281,17 +1308,14 @@ with st.sidebar:
         calc_mode_ui = st.radio(
             "Tools + PPE handling (only applies when both listings are provided)",
             key="ks_calc_mode",
-            options=[
-                "Combined (one vending machine plan for both)",
-                "Separated (Tools and PPE each get their own plan)",
-            ],
-            index=0,
+            options=list(CALC_MODE_LABELS.values()),
+            index=label_index(CALC_MODE_LABELS, DEFAULTS.calc_mode),
         )
 
     use_description_2 = st.checkbox(
         "Use Description_2 (if available)",
         key="ks_use_desc2",
-        value=True,
+        value=DEFAULTS.use_description_2,
     )
 
     st.divider()
@@ -1300,23 +1324,16 @@ with st.sidebar:
     year_mode_ui = st.selectbox(
         "Year handling",
         key="ks_year_mode",
-        options=[
-            "Use all rows",
-            "Keep latest year only",
-        ],
-        index=0,
+        options=list(YEAR_MODE_LABELS.values()),
+        index=label_index(YEAR_MODE_LABELS, DEFAULTS.year_mode),
         help="Only applied if a Year column is mapped and contains usable years.",
     )
 
     dedup_mode_ui = st.selectbox(
         "Deduplicate planning rows",
         key="ks_dedup_mode",
-        options=[
-            "No deduplication",
-            "Deduplicate by Code",
-            "Deduplicate by Code + Supplier",
-        ],
-        index=2,
+        options=list(DEDUP_MODE_LABELS.values()),
+        index=label_index(DEDUP_MODE_LABELS, DEFAULTS.dedup_mode),
         help="Recommended when the source contains repeated rows across years, suppliers, or transactions.",
     )
 
@@ -1398,7 +1415,7 @@ with st.sidebar:
     apply_overrides_ui = st.checkbox(
         "Apply overrides from library",
         key="ks_apply_overrides",
-        **_default_unless_seeded("ks_apply_overrides", True),
+        **_default_unless_seeded("ks_apply_overrides", DEFAULTS.apply_overrides),
         help=(
             "When ON, the newest saved override set for this customer and site "
             "(or the corrections you are editing) is applied between AI "
@@ -1424,7 +1441,7 @@ with st.sidebar:
     )
 
 # Translate the radio choice into an internal constant
-sp_mode = SP_MODE_REPLICATE if sp_mode_ui.startswith("Replicate") else SP_MODE_PARTITION
+sp_mode = sp_mode_from_label(sp_mode_ui)
 
 # Bundle the two runtime sizing factors into one frozen config, built once from
 # the UI values; every reader below reads from it, not a mutable global.
@@ -1543,7 +1560,7 @@ _saved_prefs = get_file_prefs(_file_key)
 # (v34.54, audit C9); a fresh upload from the values remembered for the file.
 _run_ktc = str((_reload_ctx or {}).get("ktc_id") or "").strip()
 _run_label = (_reload_ctx or {}).get("customer_label")
-_default_ktc = _run_ktc or _saved_prefs.get("ktc_id") or os.getenv("KROMI_DEFAULT_KTC_ID", "191")
+_default_ktc = _run_ktc or _saved_prefs.get("ktc_id") or os.getenv("KROMI_DEFAULT_KTC_ID", DEFAULTS.ktc_id)
 _default_customer = (
     _run_label if _run_label is not None
     else (_saved_prefs.get("customer") or os.getenv("KROMI_DEFAULT_CUSTOMER", ""))
@@ -1607,15 +1624,8 @@ with _om_col1:
     operational_mode = st.selectbox(
         "Cabinet composition",
         key="ks_op_mode",
-        options=[
-            "Standard (best fit per tool)",
-            "Helix only",
-            "Carousel only",
-            "Helix + Carousel (capped)",
-            _FIXED_MODE_LABEL,
-            "Only article number assignment",
-        ],
-        index=0,
+        options=list(OP_MODE_LABELS.values()),
+        index=label_index(OP_MODE_LABELS, DEFAULTS.op_mode),
         help=(
             "Helix only stores every vending tool in a coil; Carousel only stores "
             "every vending tool in a slot; the capped mode keeps normal routing but "
@@ -1628,7 +1638,7 @@ with _om_col1:
 with _om_col2:
     if operational_mode == _FIXED_MODE_LABEL:
         _keep_widget_state(("ks_max_carousels",))
-        max_carousels_cap = int(st.session_state.get("ks_max_carousels", 2))
+        max_carousels_cap = int(st.session_state.get("ks_max_carousels", DEFAULTS.max_carousels))
         fixed_headroom_pct = float(st.number_input(
             "Headroom to keep free (%)",
             key="ks_fixed_headroom",
@@ -1640,7 +1650,7 @@ with _om_col2:
                 "to 63 of its 70 spirals and a Carousel up to 648 of its 720 "
                 "slots."
             ),
-            **_default_unless_seeded("ks_fixed_headroom", 10.0),
+            **_default_unless_seeded("ks_fixed_headroom", DEFAULTS.fixed_headroom_pct),
         ))
     else:
         max_carousels_cap = st.number_input(
@@ -1648,7 +1658,7 @@ with _om_col2:
             key="ks_max_carousels",
             min_value=1,
             max_value=50,
-            value=2,
+            value=DEFAULTS.max_carousels,
             step=1,
             help="Only used in 'Helix + Carousel (capped)'. Carousel demand above this "
             "many cabinets is spilled into Helix coils.",
@@ -1657,15 +1667,7 @@ with _om_col2:
         fixed_headroom_pct = 0.0
 
 # Normalize the UI label to a compact mode token used downstream.
-_OP_MODE_MAP = {
-    "Standard (best fit per tool)": "",
-    "Helix only": "Helix",
-    "Carousel only": "Carousel",
-    "Helix + Carousel (capped)": "Capped",
-    _FIXED_MODE_LABEL: FIXED_MODE,
-    "Only article number assignment": "NumberingOnly",
-}
-op_mode = _OP_MODE_MAP.get(operational_mode, "")
+op_mode = token_for(OP_MODE_LABELS, operational_mode, default=OP_STANDARD)
 
 # Fixed configuration (v34.52): the machines per supply point. Articles reach
 # a supply point the usual way (the Program -> Supply Point mapping, or the
@@ -1690,7 +1692,7 @@ if op_mode == FIXED_MODE:
             "a locker article into a locker with larger compartments. Off: "
             "articles stay in their own type and are flagged when it is full."
         ),
-        **_default_unless_seeded("ks_fixed_spill", True),
+        **_default_unless_seeded("ks_fixed_spill", DEFAULTS.fixed_allow_spill),
     ))
     # Stock-based Helix promotion (v34.58): off by default.
     _promo_c1, _promo_c2 = st.columns([2, 1])
@@ -1707,7 +1709,7 @@ if op_mode == FIXED_MODE:
             "free goes to articles that found none. Only the machine type and "
             "the takeover maximum change. Needs the Current stock column."
         ),
-        **_default_unless_seeded("ks_fixed_stock_promo", False),
+        **_default_unless_seeded("ks_fixed_stock_promo", DEFAULTS.fixed_stock_promotion),
     ))
     if _stock_promo:
         fixed_stock_months = float(_promo_c2.number_input(
@@ -1715,7 +1717,7 @@ if op_mode == FIXED_MODE:
             key="ks_fixed_stock_months",
             min_value=0.5, max_value=24.0, step=0.5,
             help="The customer's stock on hand is assumed to last this many months.",
-            **_default_unless_seeded("ks_fixed_stock_months", 3.0),
+            **_default_unless_seeded("ks_fixed_stock_months", DEFAULTS.fixed_stock_months),
         ))
     else:
         _keep_widget_state(("ks_fixed_stock_months",))
@@ -1770,11 +1772,8 @@ if op_mode == "NumberingOnly":
     with _nb_col1:
         _numbering_system_ui = st.radio(
             "Articles are",
-            options=[
-                "Kanban — one KROMI number per article",
-                "KTC — customer-property predecessor + KROMI successor pair",
-            ],
-            index=0,
+            options=list(NUMBERING_SYSTEM_LABELS.values()),
+            index=label_index(NUMBERING_SYSTEM_LABELS, DEFAULTS.numbering_system),
             key="ks_numbering_system",
             help=(
                 "Default property system for every article in this run. A "
@@ -1787,7 +1786,7 @@ if op_mode == "NumberingOnly":
         "KTC" if str(_numbering_system_ui).startswith("KTC") else "Kanban"
     )
 else:
-    numbering_default_system = "Kanban"
+    numbering_default_system = DEFAULTS.numbering_system
 
 st.subheader("Listings")
 st.caption("Select which sheet is Tools and which (if any) is PPE. Both sheets must share the same column structure.")
@@ -1823,7 +1822,7 @@ if sheet_tools is not None and sheet_ppe is not None and sheet_tools == sheet_pp
 
 # Header row, in every mode (v34.50, audit C11; numbering-only since v34.44).
 # Import templates often carry banner rows above the real column names.
-_hr_kwargs: Dict[str, Any] = {} if "ks_header_row" in st.session_state else {"value": 1}
+_hr_kwargs: Dict[str, Any] = {} if "ks_header_row" in st.session_state else {"value": DEFAULTS.header_row}
 _header_row_ui = st.number_input(
     "Header row in the sheet",
     min_value=1, max_value=50, step=1, key="ks_header_row",
@@ -2009,83 +2008,42 @@ if ai_colmap:
         st.info(f"AI mapping unavailable ({exc}). Falling back to automatic header matching.")
         ai_guess = {}
 
-default_code = ai_guess.get("Code") or guess_column(df, CODE_SYNONYMS)
-default_prod = ai_guess.get("ProductCategory") or guess_column(df, ["ProductCategory", "Produktkategorie", "Warengruppe", "Category"])
-default_desc1 = ai_guess.get("Description") or guess_column(df, DESCRIPTION_SYNONYMS)
-default_desc2 = ai_guess.get("Description_2") or guess_column(df, ["Description_2", "Description2", "Langtext", "Zusatztext"])
-default_sup = ai_guess.get("SupplierCode") or guess_column(df, ["SupplierCode", "Lieferant", "Hersteller", "Manufacturer", "Supplier"])
-default_cons = ai_guess.get("Consumption_pcs") or guess_column(df, CONSUMPTION_SYNONYMS)
-default_pack = ai_guess.get("PackUnits") or guess_column(df, ["PackUnits", "VPE", "VE", "Pack", "Packsize", "Packaging"])
-default_size = ai_guess.get("SizeCategory") or guess_column(df, ["SizeCategory", "Size", "Größe", "Groesse", "KTC Size"])
-default_year = ai_guess.get("Year") or guess_column(df, ["Year", "Jahr", "FiscalYear", "PeriodYear"])
-default_program = ai_guess.get("Program") or guess_column(df, ["Program", "Programme", "Programma", "Programa", "Project", "Projekt", "Area", "Bereich", "Section"])
-default_restock = ai_guess.get("Restocking") or guess_column(df, ["Restocking", "Restock", "Restockable", "Nachfüllen", "Nachfuellen", "Nachschub", "Refill", "Auffüllen", "Auffuellen"])
-default_site = ai_guess.get("Site") or guess_column(df, ["Site", "Sites", "Standort", "Plant", "Factory", "Usine", "Werk"])
-default_stdspecial = ai_guess.get("StdSpecial") or guess_column(df, [
-    "Standard/Special", "Standard / Special", "StandardSpecial", "Std/Special",
-    "Standard/Sonder", "Standard / Sonder", "Art", "Tooltype", "Tool type",
-    "Typ", "Type", "Klasse", "Class", "Kategorie",
-])
-default_dims = ai_guess.get("PackageDimensions") or guess_column(df, [
-    "PackageDimensions", "Package dimensions", "Packagedimensions", "Package_Dimensions",
-    "Abmessungen", "Abmessung", "Maße", "Masse", "Dimensions", "Dimension",
-    "Verpackungsmaße", "Verpackungsmasse", "Größe LxBxH", "LxBxH", "L x B x H",
-    "Package Size", "Packmaß", "Packmasse",
-])
-default_regrind = ai_guess.get("Regrind") or guess_column(df, [
-    "Regrind", "Re-grind", "Regrindable", "Regrinding", "Reground",
-    "Nachschleifbar", "Nachschleifen", "Nachschliff", "Schleifbar",
-    "Wiederaufbereitbar", "Aufbereitbar",
-])
-default_systemtyp = ai_guess.get("SystemTyp") or guess_column(df, [
-    "SystemTyp", "System type", "Systemtyp", "System Typ", "Lagersystem",
-    "Lagersystem (KTC, usw)", "Storage system", "Vending system", "System",
-])
-# Current stock for the takeover sheets (v34.56). Minimum / maximum / safety
-# levels and stock locations are never taken (engine.takeover).
-default_stock = guess_stock_column(df)
+# Suggested columns (engine/column_suggest.py, v34.62): the AI proposal, else
+# the synonym match; the stock column has its own rule (never a min, max,
+# safety level or location). Optional defaults never take a column a required
+# field (or an earlier optional field) already uses (v34.50, audit C11), so
+# "Year" does not grab "Jahresverbrauch". A user's explicit pick is untouched;
+# the conflict guard below remains the safety net.
+_raw_guess = raw_guesses(df, ai_guess)
+default_code = _raw_guess["Code"]
+default_desc1 = _raw_guess["Description"]
+default_cons = _raw_guess["Consumption_pcs"]
 
-# v34.50 (audit C11): optional auto-detected defaults never take a column a
-# required field (or an earlier optional field) already uses. Substring
-# synonyms stay (German compounds), but "Year" no longer grabs the
-# consumption column "Jahresverbrauch", nor "Standard/Special" the code
-# column "Artikel". A user's explicit pick is untouched; the conflict guard
-# below remains the safety net.
+
 def _effective_required(key: str, default: Optional[str]) -> Optional[str]:
     _v = st.session_state.get(key)
     return _v if _v in cols else default
 
 
-_deconflicted = deconflict_defaults(
-    {
-        "Code": _effective_required("cm_code", default_code),
-        "Description": _effective_required("cm_desc1", default_desc1),
-        "Consumption_pcs": _effective_required("cm_cons", default_cons),
-    },
-    {
-        "ProductCategory": default_prod, "Year": default_year,
-        "Description_2": default_desc2, "Program": default_program,
-        "Restocking": default_restock, "SupplierCode": default_sup,
-        "SizeCategory": default_size, "Site": default_site,
-        "StdSpecial": default_stdspecial, "PackUnits": default_pack,
-        "PackageDimensions": default_dims, "Regrind": default_regrind,
-        "SystemTyp": default_systemtyp, "Stock_pcs": default_stock,
-    },
-)
-default_prod = _deconflicted["ProductCategory"]
-default_year = _deconflicted["Year"]
-default_desc2 = _deconflicted["Description_2"]
-default_program = _deconflicted["Program"]
-default_restock = _deconflicted["Restocking"]
-default_sup = _deconflicted["SupplierCode"]
-default_size = _deconflicted["SizeCategory"]
-default_site = _deconflicted["Site"]
-default_stdspecial = _deconflicted["StdSpecial"]
-default_pack = _deconflicted["PackUnits"]
-default_dims = _deconflicted["PackageDimensions"]
-default_regrind = _deconflicted["Regrind"]
-default_systemtyp = _deconflicted["SystemTyp"]
-default_stock = _deconflicted["Stock_pcs"]
+_suggested = suggest_columns(df, ai_guess, required={
+    "Code": _effective_required("cm_code", default_code),
+    "Description": _effective_required("cm_desc1", default_desc1),
+    "Consumption_pcs": _effective_required("cm_cons", default_cons),
+})
+default_prod = _suggested["ProductCategory"]
+default_year = _suggested["Year"]
+default_desc2 = _suggested["Description_2"]
+default_program = _suggested["Program"]
+default_restock = _suggested["Restocking"]
+default_sup = _suggested["SupplierCode"]
+default_size = _suggested["SizeCategory"]
+default_site = _suggested["Site"]
+default_stdspecial = _suggested["StdSpecial"]
+default_pack = _suggested["PackUnits"]
+default_dims = _suggested["PackageDimensions"]
+default_regrind = _suggested["Regrind"]
+default_systemtyp = _suggested["SystemTyp"]
+default_stock = _suggested["Stock_pcs"]
 
 # Once the user hides optional columns, optional mapping switches to manual
 # mode: any earlier optional assignment is cleared and auto-detection is
@@ -2281,31 +2239,17 @@ if st.session_state.get("_std_special_mapped", False) != _now_std_special_mapped
     st.session_state["_std_special_mapped"] = _now_std_special_mapped
     st.rerun()
 
+# One mapping for the engine (v34.61): Description 2 is dropped when switched off.
+_mapping = effective_mapping(ColumnMapping(
+    code=col_code, description=col_desc1, consumption=col_cons, description_2=col_desc2,
+    category=col_prod, supplier_code=col_sup, size=col_size, pack_units=col_pack,
+    year=col_year, program=col_program, restocking=col_restock, site=col_site,
+    std_special=col_stdspecial, dimensions=col_dims, regrind=col_regrind,
+    system_type=col_systemtyp, stock=col_stock,
+), use_description_2=use_description_2)
+
 # Column-mapping guard
-_mapping_pairs = [
-    ("Code", col_code),
-    ("Description", col_desc1),
-    ("Description_2", col_desc2),
-    ("Consumption pcs", col_cons),
-    ("ProductCategory", col_prod),
-    ("SupplierCode", col_sup),
-    ("SizeCategory", col_size),
-    ("PackUnits", col_pack),
-    ("Year", col_year),
-    ("Program", col_program),
-    ("Restocking", col_restock),
-    ("Site", col_site),
-    ("StdSpecial", col_stdspecial),
-    ("PackageDimensions", col_dims),
-    ("Regrind", col_regrind),
-    ("SystemTyp", col_systemtyp),
-    ("Stock", col_stock),
-]
-_mapping_pairs = [(f, c) for f, c in _mapping_pairs if c]  # drop unmapped (None)
-_col_to_fields: Dict[str, List[str]] = {}
-for field, col in _mapping_pairs:
-    _col_to_fields.setdefault(col, []).append(field)
-_collisions = {col: fields for col, fields in _col_to_fields.items() if len(fields) > 1}
+_collisions = mapping_collisions(_mapping)
 if _collisions:
     st.error(
         " Column-mapping conflict detected — the same source column is mapped to multiple target fields. "
@@ -2316,199 +2260,71 @@ if _collisions:
         st.markdown(f"- **`{col}`** is mapped to: {', '.join(fields)} — pick ONE field for this column, and set the others to `— not available —`")
     st.stop()
 
-# Build working dataframe (Tools + PPE concatenation)
-rename_map = {
-    col_code: "Code",
-    col_desc1: "Description",
-}
-if col_cons:
-    # In the numbering-only mode consumption is optional; a None pick must
-    # not enter the rename map (it would demand a column named 'None').
-    rename_map[col_cons] = "Consumption_pcs"
-if col_sup:
-    rename_map[col_sup] = "SupplierCode"
-if col_desc2:
-    rename_map[col_desc2] = "Description_2"
-if col_prod:
-    rename_map[col_prod] = "ProductCategory"
-if col_size:
-    rename_map[col_size] = "SizeCategory"
-if col_pack:
-    rename_map[col_pack] = "PackUnits"
-if col_year:
-    rename_map[col_year] = "Year"
-if col_program:
-    rename_map[col_program] = "Program"
-if col_restock:
-    rename_map[col_restock] = "Restocking"
-if col_site:
-    rename_map[col_site] = "Site"
-if col_stdspecial:
-    rename_map[col_stdspecial] = "StdSpecial"
-if col_dims:
-    rename_map[col_dims] = "PackageDimensions"
-if col_regrind:
-    rename_map[col_regrind] = "Regrind"
-if col_systemtyp:
-    rename_map[col_systemtyp] = "SystemTyp"
-if col_stock:
-    rename_map[col_stock] = STOCK_COL
-
-def _prep_listing_df(raw_df: pd.DataFrame, listing_tag: str) -> pd.DataFrame:
-    """Rename, tag, sanitize, and align a single listing's dataframe."""
-    if raw_df is None:
-        return None
-    out = raw_df.copy()
-    # Apply rename only for columns that actually exist in this sheet
-    effective_rename = {src: dst for src, dst in rename_map.items() if src in out.columns}
-    out.rename(columns=effective_rename, inplace=True)
-    out["Listing"] = listing_tag
-    # sanitize the text columns that downstream code treats as strings.
-    text_cols = ["Code", "Description", "Description_2", "SupplierCode", "ProductCategory", "SizeCategory", "Program", "Site", "StdSpecial", "PackageDimensions", "Regrind", "SystemTyp"]
-    for c in text_cols:
-        if c in out.columns:
-            # Codes: integral floats keep their integer text (v34.50).
-            out[c] = out[c].map(clean_code_cell if c == "Code" else clean_text_cell)
-    return out
-
-frames_to_concat: List[pd.DataFrame] = []
-prepped_tools = _prep_listing_df(df_tools, LISTING_TOOLS)
-prepped_ppe = _prep_listing_df(df_ppe, LISTING_PPE)
+# Build working dataframe (Tools + PPE concatenation) in the engine (v34.61).
+_tool_list = build_tool_list(df_tools, df_ppe, _mapping, use_description_2=use_description_2)
 
 # Per-listing column-existence check. The column mapping is chosen from the
 # Tools sheet headers; a selected PPE sheet (or a differently-structured
-# sheet) may not contain every mapped column. Those rows would silently get
-# empty values — and a missing Consumption or Code column means those rows
-# route to Kanban with zero demand, undercounting the plan. Warn explicitly.
-_critical_fields = {"Code", "Consumption_pcs"}
-for _raw_df, _tag in ((df_tools, LISTING_TOOLS), (df_ppe, LISTING_PPE)):
-    if _raw_df is None:
-        continue
-    _present = set(_raw_df.columns)
-    _missing = [(src, dst) for src, dst in rename_map.items() if src not in _present]
-    if _missing:
-        _crit = [dst for _, dst in _missing if dst in _critical_fields]
-        _msg = "; ".join(f"{dst} (expected column '{src}')" for src, dst in _missing)
-        if _crit:
-            st.error(
-                f"The **{_tag}** sheet is missing mapped column(s) that are "
-                f"required for correct planning: {_msg}. Rows from this sheet "
-                "would be treated as having no "
-                + (" / ".join(_crit))
-                + ". Map columns that exist in this sheet, or remove it from "
-                "the run."
-            )
-            st.stop()
-        else:
-            st.warning(
-                f"The **{_tag}** sheet does not contain mapped column(s): "
-                f"{_msg}. Rows from this sheet will have those fields empty."
-            )
-
-if prepped_tools is not None:
-    frames_to_concat.append(prepped_tools)
-if prepped_ppe is not None:
-    frames_to_concat.append(prepped_ppe)
-
-work = pd.concat(frames_to_concat, ignore_index=True)
-
-# Empty-code guard
-if "Code" in work.columns:
-    code_clean = work["Code"].map(clean_text_cell)
-    empty_code_mask = code_clean.eq("")
-    n_empty = int(empty_code_mask.sum())
-    if n_empty > 0:
-        st.warning(
-            f" **Empty Code guard**: dropped {n_empty} row(s) with blank/missing Code "
-            f"after whitespace cleanup. These rows cannot be safely deduplicated — their "
-            f"consumption would otherwise collapse into a single phantom row. "
-            f"If these are real items, assign SAP codes in the source data and re-run."
+# sheet) may not contain every mapped column. A missing Consumption or Code
+# column would route those rows to Kanban with zero demand: stop. Otherwise warn.
+for _gap in _tool_list.missing:
+    _msg = "; ".join(f"{dst} (expected column '{src}')" for src, dst in _gap.missing)
+    if _gap.critical:
+        st.error(
+            f"The **{_gap.listing}** sheet is missing mapped column(s) that are "
+            f"required for correct planning: {_msg}. Rows from this sheet "
+            "would be treated as having no "
+            + (" / ".join(_gap.critical))
+            + ". Map columns that exist in this sheet, or remove it from "
+            "the run."
         )
-        # Show a sample before dropping so the user can verify
-        sample_cols = [c for c in ["Listing", "Description", "Description_2", "Consumption_pcs"] if c in work.columns]
-        if sample_cols:
-            with st.expander(f"Show dropped rows ({min(20, n_empty)} shown)"):
-                st.dataframe(
-                    work.loc[empty_code_mask, sample_cols].head(20),
-                    width="stretch",
-                    hide_index=True,
-                )
-        work = work.loc[~empty_code_mask].reset_index(drop=True)
+        st.stop()
+    else:
+        st.warning(
+            f"The **{_gap.listing}** sheet does not contain mapped column(s): "
+            f"{_msg}. Rows from this sheet will have those fields empty."
+        )
 
-for c in ["Code", "Description", "Consumption_pcs"]:
-    if c not in work.columns:
-        work[c] = ""
+work = _tool_list.work
 
-if "SupplierCode" not in work.columns:
-    work["SupplierCode"] = ""
-if "Description_2" not in work.columns:
-    work["Description_2"] = ""
-if not use_description_2:
-    work["Description_2"] = ""
-if "ProductCategory" not in work.columns:
-    work["ProductCategory"] = ""
-if "SizeCategory" not in work.columns:
-    work["SizeCategory"] = ""
-# Regrind flag (optional mapped column, YES/NO). Parse to a boolean the sizing
-# step uses to floor reground Helix items to two spirals. Absent column -> False.
-if "Regrind" in work.columns:
-    work["Regrind"] = work["Regrind"].map(is_regrind)
-else:
-    work["Regrind"] = False
-# System type (optional mapped column): kept as raw text here; parsed and
-# applied as an override after routing. Default blank when unmapped. The
-# Routing_Pinned flag (set later for fixed KTC/Locker rows) always exists so
-# bulk routing / the rebalancer can read it.
-if "SystemTyp" not in work.columns:
-    work["SystemTyp"] = ""
-work["Routing_Pinned"] = False
-if "PackUnits" not in work.columns:
-    work["PackUnits"] = ""
-if "Year" not in work.columns:
-    work["Year"] = pd.NA
-if "Program" not in work.columns:
-    work["Program"] = ""
-if "Site" not in work.columns:
-    work["Site"] = ""
-
-work["Consumption_pcs"] = parse_number_series(work["Consumption_pcs"], default=0.0)
-work["PackUnits"] = parse_number_series(work["PackUnits"], default=float("nan"))
-# Takeover (v34.56): stock in pieces (missing or negative counts as none) and,
-# when a category column is mapped, its raw text (the KDS Bezeichnung 1) for
-# the takeover sheets. Both exist only when a stock column is mapped, so every
-# other run keeps its frame and its exports unchanged.
-if col_stock and STOCK_COL in work.columns:
-    work[STOCK_COL] = parse_number_series(work[STOCK_COL], default=0.0).clip(lower=0.0)
-    if col_prod:
-        work[CATEGORY_TEXT_COL] = work["ProductCategory"].map(clean_text_cell)
-work["Year"] = parse_year_series(work["Year"])
+# Empty-code guard (the rows were dropped by build_tool_list)
+_dropped_codes = _tool_list.dropped_empty_codes
+n_empty = len(_dropped_codes)
+if n_empty > 0:
+    st.warning(
+        f" **Empty Code guard**: dropped {n_empty} row(s) with blank/missing Code "
+        f"after whitespace cleanup. These rows cannot be safely deduplicated \u2014 their "
+        f"consumption would otherwise collapse into a single phantom row. "
+        f"If these are real items, assign SAP codes in the source data and re-run."
+    )
+    # Show a sample so the user can verify
+    sample_cols = [c for c in ["Listing", "Description", "Description_2", "Consumption_pcs"] if c in _dropped_codes.columns]
+    if sample_cols:
+        with st.expander(f"Show dropped rows ({min(20, n_empty)} shown)"):
+            st.dataframe(
+                _dropped_codes[sample_cols].head(20),
+                width="stretch",
+                hide_index=True,
+            )
 
 # Resolve effective (customer, site) scope
-effective_customer = (customer_default or "").strip() or "default"
-effective_site = (site_default or "").strip() or "default"
-
-if col_site and "Site" in work.columns:
-    site_vals = [
-        s for s in work["Site"].astype(str).str.strip().unique()
-        if s and s.lower() not in {"", "nan", "none"}
-    ]
-    if len(site_vals) == 1:
-        effective_site = site_vals[0]
-    elif len(site_vals) > 1:
-        # Multiple sites in the same upload — keep sidebar default to avoid
-        # an ambiguous auto-pick. Show an informational caption.
-        st.caption(
-            f"ℹ Source Excel contains multiple Site values "
-            f"({', '.join(site_vals[:5])}{' …' if len(site_vals) > 5 else ''}). "
-            f"Using sidebar Site '{effective_site}' for overrides scope."
-        )
+effective_customer, effective_site, site_vals = resolve_override_scope(
+    customer_default, site_default, work, site_mapped=bool(col_site))
+if len(site_vals) > 1:
+    # Multiple sites in the same upload: the sidebar default is kept to
+    # avoid an ambiguous auto-pick. Show an informational caption.
+    st.caption(
+        f"ℹ Source Excel contains multiple Site values "
+        f"({', '.join(site_vals[:5])}{' …' if len(site_vals) > 5 else ''}). "
+        f"Using sidebar Site '{effective_site}' for overrides scope."
+    )
 
 if _reload_ctx:
     # Recompute uses the stored run's own customer and site, so the matching
     # override set resolves. This wins over the sidebar inputs and any Site
     # column in the workbook.
-    effective_customer = (_reload_ctx.get("customer") or "").strip() or "default"
-    effective_site = (_reload_ctx.get("site") or "").strip() or "default"
+    effective_customer = scope_value(_reload_ctx.get("customer"))
+    effective_site = scope_value(_reload_ctx.get("site"))
 
 # Show the active scope so the user can confirm before clicking Run
 st.caption(
@@ -2517,10 +2333,8 @@ st.caption(
 
 # Program → Supply Point mapping
 program_to_sp_map: Dict[str, int] = {}
-has_program_col = col_program is not None and "Program" in work.columns
-program_mapping_active = bool(
-    has_program_col and int(n_supply_points) > 1 and op_mode != "NumberingOnly"
-)
+program_mapping_active = _program_mapping_active(
+    work, _mapping, n_supply_points=int(n_supply_points), op_mode=op_mode)
 
 if program_mapping_active:
     st.subheader("Program → Supply Point mapping")
@@ -2532,12 +2346,7 @@ if program_mapping_active:
     )
 
     # Distinct programmes, sorted with "" (missing) last
-    distinct_programs = sorted(
-        [p for p in work["Program"].astype(str).unique() if p.strip() != ""]
-    )
-    has_blank_program = (work["Program"].astype(str).str.strip() == "").any()
-    if has_blank_program:
-        distinct_programs.append("")
+    _programs = distinct_programs(work)
 
     # Show a hint about how many rows / what consumption is in each programme
     prog_stats = (
@@ -2565,16 +2374,16 @@ if program_mapping_active:
             f"Apply SP {int(bulk_target_sp)} to all programmes below",
             help="Sets every programme dropdown below to the chosen SP. You can still override individual rows afterwards.",
         ):
-            for p in distinct_programs:
+            for p in _programs:
                 st.session_state[f"prog_sp::{p}"] = int(bulk_target_sp)
 
     # Per-programme dropdowns — grouped so the list is scannable
-    st.caption(f"Assign each of the **{len(distinct_programs)} programme(s)** to a supply point:")
+    st.caption(f"Assign each of the **{len(_programs)} programme(s)** to a supply point:")
 
     # Render in a compact grid to avoid page-long scroll
     cols_per_row = 3
-    for i in range(0, len(distinct_programs), cols_per_row):
-        batch = distinct_programs[i : i + cols_per_row]
+    for i in range(0, len(_programs), cols_per_row):
+        batch = _programs[i : i + cols_per_row]
         row_cols = st.columns(cols_per_row)
         for j, prog in enumerate(batch):
             with row_cols[j]:
@@ -2625,7 +2434,7 @@ if program_mapping_active:
         )
 
     # Validation: every distinct programme must have an SP picked.
-    unassigned = [p for p in distinct_programs if p not in program_to_sp_map]
+    unassigned = unassigned_programs(_programs, program_to_sp_map)
     if unassigned:
         st.error(
             f" {len(unassigned)} programme(s) are unassigned. Every programme must "
@@ -2636,28 +2445,20 @@ if program_mapping_active:
         st.stop()
 
     # Apply the mapping to the working dataframe — BEFORE dedup.
-    work["SupplyPoint"] = work["Program"].astype(str).map(program_to_sp_map).astype("Int64")
-
     # Any unmapped rows (shouldn't happen after validation) get SP 1 as safety
-    missing_sp = work["SupplyPoint"].isna()
-    if missing_sp.any():
+    _n_default_sp = assign_supply_points(work, program_to_sp_map)
+    if _n_default_sp:
         st.warning(
-            f"Safety net: {int(missing_sp.sum())} row(s) did not match any mapped programme "
+            f"Safety net: {_n_default_sp} row(s) did not match any mapped programme "
             f"and were assigned to SP 1 by default."
         )
-        work.loc[missing_sp, "SupplyPoint"] = 1
-    work["SupplyPoint"] = work["SupplyPoint"].astype(int)
 else:
     # No program mapping path: the existing single-supply-point behavior
     pass
 
 # Planning base preparation
-year_mode = "latest_year_only" if year_mode_ui == "Keep latest year only" else "all_rows"
-dedup_mode = {
-    "No deduplication": "none",
-    "Deduplicate by Code": "code",
-    "Deduplicate by Code + Supplier": "code_supplier",
-}[dedup_mode_ui]
+year_mode = token_for(YEAR_MODE_LABELS, year_mode_ui, default="all_rows")
+dedup_mode = token_for(DEDUP_MODE_LABELS, dedup_mode_ui)
 
 has_year = work["Year"].notna().any() if "Year" in work.columns else False
 
@@ -2749,33 +2550,10 @@ if len(planning_base) == 0:
 
 work = planning_base.copy()
 
-# Audit columns
-work["ProductCategory_Source"] = ""
-work["ProductCategory_AI_Model"] = ""
-work["ProductCategory_AI_TimestampUTC"] = ""
-work["ProductCategory_AI_Consulted"] = False
-work["ProductCategory_Evidence"] = ""
-work["ProductCategory_Confidence"] = ""
-work["ProductCategory_Reason"] = ""
-
-# ToolClass — finer-grained subclassification of products. Optional metadata
-# that doesn't drive cabinet sizing (ProductCategory does). Surfaced in the
-# Technician Review and the Excel export. Populated heuristically when the
-# classification evidence is specific enough, otherwise left empty.
-work["ToolClass"] = ""
-work["ToolClass_Source"] = ""
-
-work["SizeCategory_Source"] = ""
-work["SizeCategory_AI_Model"] = ""
-work["SizeCategory_AI_TimestampUTC"] = ""
-work["SizeCategory_AI_Consulted"] = False
-
-work["PackUnits_Source"] = ""
-work["PackUnits_AI_Model"] = ""
-work["PackUnits_AI_TimestampUTC"] = ""
-work["PackUnits_AI_Consulted"] = False
-
-work["SystemCategory_Reason"] = ""
+# Audit columns: classification provenance (engine/tool_list.py, v34.61).
+# ToolClass is a finer subclass surfaced in the Technician Review and the
+# export; it does not drive sizing.
+add_classification_audit_columns(work)
 
 # Run button
 st.divider()
@@ -3254,46 +3032,35 @@ if _stored_source_cls:
          for _c, _rec in _stored_source_cls.items()),
         key=lambda t: str(t[0]),
     ))
-_plan_params = PlanParams(
-    n_supply_points=int(n_supply_points),
-    sp_mode=sp_mode,
-    consumption_period_months=float(consumption_period_months),
-    coverage_days=coverage_days,
-    coverage_days_special=coverage_days_special,
-    usage_threshold=usage_threshold,
-    per_class_thresholds=tuple(sorted(per_class_thresholds.items())),
+# The run's settings, after the mode rules, and the planner parameters built
+# from them (engine/run_settings.py, v34.62).
+_run_settings = effective_settings(RunSettings(
+    use_description_2=bool(use_description_2), year_mode=year_mode, dedup_mode=dedup_mode,
+    ktc_threshold=usage_threshold,
     optional_thresholds_active=bool(optional_thresholds_active),
-    force_screws_accessories_kanban=bool(force_screws_accessories_kanban),
-    manual_size_fixes=tuple(sorted(
-        (str(_k), str(_v)) for _k, _v in _manual_size_fix.items())),
-    stored_classifications=_stored_cls,
-    helix_threshold=helix_threshold,
-    dims_mapped=bool(col_dims),
-    minimum_carousel_allocation=int(minimum_carousel_allocation),
-    plan_cfg=_plan_cfg,
-    system_type_mapped=bool(col_systemtyp),
+    per_class_thresholds=tuple(sorted(per_class_thresholds.items())),
+    insert_pack_units=insert_default_pack_units, helix_threshold=helix_threshold,
+    consumption_months=consumption_period_months,
+    helix_overfill_factor=helix_single_spiral_overfill_factor_ui,
+    min_carousel_allocation=minimum_carousel_allocation,
+    coverage_days=coverage_days, coverage_days_special=coverage_days_special,
     special_ktc=bool(st.session_state.get("ks_special_ktc", False)),
-    stdspecial_mapped=bool(col_stdspecial),
-    enable_bulk_routing=bool(enable_bulk_routing),
-    op_mode=op_mode,
-    restock_categories=_restock_categories,
-    calc_mode_separated=calc_mode.startswith("Separated"),
-    capacity_buffer_pct=float(capacity_buffer_pct),
-    enable_rebalancer=bool(enable_rebalancer),
-    underuse_threshold_pct=float(underuse_threshold_pct),
-    max_carousels_cap=max_carousels_cap,
-    fixed_machines=fixed_machines,
-    fixed_headroom_pct=float(fixed_headroom_pct),
-    fixed_allow_spill=bool(fixed_allow_spill),
-    fixed_stock_promotion_months=float(fixed_stock_months),
-    base_counts=BaseCounts(
-        rows_before=int(base_info["rows_before"]),
-        rows_after_year_filter=int(base_info["rows_after_year_filter"]),
-        rows_after_dedup=int(base_info["rows_after_dedup"]),
-        consumption_before=base_info.get("consumption_before"),
-        consumption_after_year=base_info.get("consumption_after_year"),
-        consumption_after_dedup=base_info.get("consumption_after_dedup"),
-    ),
+    carousel_reserve_factor=carousel_reserve_factor_ui,
+    carousel_fill_ceiling=carousel_fill_ceiling_ui,
+    enable_rebalancer=bool(enable_rebalancer), underuse_threshold_pct=underuse_threshold_pct,
+    capacity_buffer_pct=capacity_buffer_pct, restock_categories=_restock_categories,
+    pack_hint_extraction=bool(enable_pack_hint_extraction),
+    bulk_routing=bool(enable_bulk_routing),
+    force_screws_kanban=bool(force_screws_accessories_kanban),
+    n_supply_points=int(n_supply_points), sp_mode=sp_mode,
+    calc_mode=calc_mode_from_label(calc_mode), op_mode=op_mode,
+    max_carousels=max_carousels_cap, fixed_headroom_pct=fixed_headroom_pct,
+    fixed_allow_spill=fixed_allow_spill, fixed_stock_promotion=fixed_stock_months > 0,
+    fixed_stock_months=fixed_stock_months, fixed_machines=fixed_machines,
+), stdspecial_mapped=bool(col_stdspecial), both_listings=both_listings)
+_plan_params = build_plan_params(
+    _run_settings, mapping=_mapping, base_info=base_info,
+    manual_size_fixes=_manual_size_fix, stored_classifications=_stored_cls,
 )
 
 import hashlib as _hashlib
@@ -3431,10 +3198,7 @@ else:
 
 # Restocking summary (v34.24)
 _ri = _plan_result.restock_info
-_restock_slots_total = (
-    int(_ri.get("slots_carousel", 0)) + int(_ri.get("slots_lockerA", 0))
-    + int(_ri.get("slots_lockerB", 0)) + int(_ri.get("slots_lockerC", 0))
-)
+_restock_slots_total = restock_slots_total(_ri)
 if _restock_slots_total > 0:
     _n_flagged = int(_ri.get("provided_true", 0)) + int(_ri.get("rule_true", 0))
     _locker_slots = _restock_slots_total - int(_ri.get("slots_carousel", 0))
@@ -3999,32 +3763,7 @@ elif sp_mode == SP_MODE_PARTITION and n_sp > 1:
         "Partition mode: items are split into disjoint subsets across SPs. "
         "'Grand total' item count = total unique items across all SPs."
     )
-rows_cmp = []
-for label, p in bucket_plans:
-    rows_cmp.append({
-        "Bucket": label,
-        "KTC items": p["ktc_count"],
-        "Kanban items": p["kanban_count"],
-        "Helix cabs": p["helix_cabs"],
-        "Carousel cabs": p["car_cabs"],
-        "Locker A cabs": p["cabA"],
-        "Locker B cabs": p["cabB"],
-        "Locker C cabs": p["cabC"],
-        "Total cabs": p["total_cabs"],
-    })
-if len(bucket_plans) > 1:
-    rows_cmp.append({
-        "Bucket": "Grand total",
-        "KTC items": grand["ktc_count"],
-        "Kanban items": grand["kanban_count"],
-        "Helix cabs": grand["helix_cabs"],
-        "Carousel cabs": grand["car_cabs"],
-        "Locker A cabs": grand["cabA"],
-        "Locker B cabs": grand["cabB"],
-        "Locker C cabs": grand["cabC"],
-        "Total cabs": grand["total_cabs"],
-    })
-df_bucket_compare = pd.DataFrame(rows_cmp)
+df_bucket_compare = bucket_compare_frame(bucket_plans, grand)
 st.dataframe(df_bucket_compare, width='stretch', hide_index=True)
 
 # Per-Supply-Point presentation summary + PDF export
@@ -4134,30 +3873,7 @@ with st.expander("Per-SP drilldown (distribution + cabinet occupation)", expande
                     st.caption("No subclass data for this supply point.")
 
 # Audit: source distribution per field
-def _source_counts(col: str) -> Dict[str, int]:
-    vc = work[col].fillna("").astype(str).value_counts()
-    return {k: int(v) for k, v in vc.items()}
-
-pc_src = _source_counts("ProductCategory_Source")
-sz_src = _source_counts("SizeCategory_Source")
-pk_src = _source_counts("PackUnits_Source")
-
-audit_rows = []
-for field_name, src_map, consulted_col in [
-    ("ProductCategory", pc_src, "ProductCategory_AI_Consulted"),
-    ("SizeCategory",    sz_src, "SizeCategory_AI_Consulted"),
-    ("PackUnits",       pk_src, "PackUnits_AI_Consulted"),
-]:
-    audit_rows.append({
-        "Field": field_name,
-        "Provided":  src_map.get("Provided", 0),
-        "Heuristic": src_map.get("Heuristic", 0),
-        "AI":        src_map.get("AI", 0),
-        "Default":   src_map.get("Default", 0),
-        "AI_Consulted (total)": int(work[consulted_col].fillna(False).astype(bool).sum()),
-        "Total rows": len(work),
-    })
-df_audit = pd.DataFrame(audit_rows)
+df_audit = audit_frame(work)
 
 with st.expander("Audit: source distribution per field"):
     st.dataframe(df_audit, width='stretch')
@@ -4170,22 +3886,6 @@ st.caption(
     "chart there, or screenshot the interactive chart."
 )
 
-def _build_distribution(df_in: pd.DataFrame, group_col: str) -> pd.DataFrame:
-    """Count + share by Listing × group_col. Share is within each Listing."""
-    if len(df_in) == 0:
-        return pd.DataFrame(columns=["Listing", group_col, "Count", "Share"])
-    g = df_in.groupby(["Listing", group_col], dropna=False).size().reset_index(name="Count")
-    g["Share"] = g.groupby("Listing")["Count"].transform(lambda s: s / s.sum() if s.sum() > 0 else 0.0)
-    return g
-
-def _build_distribution_by_volume(df_in: pd.DataFrame, group_col: str) -> pd.DataFrame:
-    """Sum of Monthly_packs by Listing × group_col. Share is within each Listing."""
-    if len(df_in) == 0:
-        return pd.DataFrame(columns=["Listing", group_col, "MonthlyPacks", "Share"])
-    g = df_in.groupby(["Listing", group_col], dropna=False)["Monthly_packs"].sum().reset_index(name="MonthlyPacks")
-    g["Share"] = g.groupby("Listing")["MonthlyPacks"].transform(lambda s: s / s.sum() if s.sum() > 0 else 0.0)
-    return g
-
 @st.cache_data(max_entries=8, show_spinner=False)
 def _cached_distribution(plan_key: str, group_col: str, by_volume: bool,
                          ktc_only: bool, _df: pd.DataFrame) -> pd.DataFrame:
@@ -4195,8 +3895,8 @@ def _cached_distribution(plan_key: str, group_col: str, by_volume: bool,
     content identity."""
     frame = _df[_df["SystemCategory"] == "KTC"] if ktc_only else _df
     if by_volume:
-        return _build_distribution_by_volume(frame, group_col)
-    return _build_distribution(frame, group_col)
+        return distribution_volume(frame, group_col)
+    return distribution_counts(frame, group_col)
 
 
 dist_cat_rows = _cached_distribution(_plan_key, "ProductCategory", False, False, work)
@@ -4204,7 +3904,7 @@ dist_cat_vol = _cached_distribution(_plan_key, "ProductCategory", True, False, w
 dist_cabtype = _cached_distribution(_plan_key, "CabinetType", False, True, work)
 dist_system = _cached_distribution(_plan_key, "SystemCategory", False, False, work)
 
-listings_in_data = sorted(work["Listing"].astype(str).unique().tolist())
+listings_in_data = _listings_in_data(work)
 multiple_listings = len(listings_in_data) > 1
 
 @st.fragment
@@ -4295,22 +3995,7 @@ _distribution_basis_fragment()
 # it ends up entirely blank (e.g. the toggle was off, so nothing was forced).
 # Applied here, before the cached workbook build, so the frame is identical
 # whether the build runs or a cached copy is served.
-if "StdSpecial" in work.columns:
-    _ss_label = {"standard": "Standard", "special": "Special"}
-    work["Std_Special"] = work["StdSpecial"].map(
-        lambda v: _ss_label.get(classify_standard_special(v), "")
-    )
-    work["Forced_to_KTC"] = (
-        work["SystemCategory_Reason"].astype(str) == SPECIAL_KTC_REASON
-    ).map({True: "Yes", False: ""})
-
-if "Restockable" in work.columns and work["Restockable"].dtype == bool:
-    # Display normalization for the exports (v34.26): Yes for restockable,
-    # empty otherwise, independent of any column mapping. Dtype-guarded so a
-    # rerun never re-maps the strings. Applied before the cached workbook
-    # build, so the frame is identical whether the build runs or a cached
-    # copy is served.
-    work["Restockable"] = work["Restockable"].map({True: "Yes", False: ""})
+apply_export_display_columns(work)
 
 @st.fragment
 def _exports_fragment():

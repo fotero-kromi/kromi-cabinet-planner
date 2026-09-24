@@ -73,6 +73,10 @@ One line per module, taken from the module docstrings; `engine/` is pure
 | Module | Purpose |
 |---|---|
 | `plan.py` | Composition layer: the deterministic `run_plan(work, overrides, params)` pipeline |
+| `tool_list.py` | Building the tool list from the mapped sheets: mapping check, renaming, blank codes, supply points, classification columns |
+| `planning_defaults.py` | The setting defaults and choice labels every front end reads |
+| `run_settings.py` | The typed settings of one run, the mode rules, and the planner parameters built from them |
+| `column_suggest.py` | The column each planning field starts from (synonyms, AI proposal, no shared columns) |
 | `preprocessing.py` | Planning base prep: dedup, year filter, pack units, restock flag normalization |
 | `boundary.py` | Deterministic boundary heuristics between preprocessing and the plan |
 | `demand.py` | Demand arithmetic and the base KTC/Kanban routing decision |
@@ -89,6 +93,7 @@ One line per module, taken from the module docstrings; `engine/` is pure
 | `export_shaping.py` | Column shaping for the export sheets, KPI/subclass frames, frame tokens |
 | `deck.py` | Pure content model for the KROMI presentation deck |
 | `workbook.py` | The result-workbook builder: every table, chart, and planogram sheet |
+| `export_frames.py` | The Summary, Run_Metadata, audit, bucket comparison and distribution tables of the workbook |
 | `kromi_numbering.py` | KROMI article number assignment |
 | `kds_structure_words.py` | The official KDS structure-code vocabulary (Bezeichnung 1 words to categories) |
 | `export_safety.py` | Keeps customer text from becoming live spreadsheet formulas in exports |

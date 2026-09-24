@@ -3,6 +3,79 @@
 
 All notable changes to the Kromi Cabinet Planner are documented here.
 
+## [v34.62] - Column suggestions and run settings move into the engine
+
+Second preparation step for the rewrite: the remaining page logic a standard
+run depends on moves into the engine, so the new app copies nothing. Planning
+results and exports are byte-identical to v34.61 (synthetic manifest
+unchanged).
+
+- `engine/column_suggest.py`: the column each planning field starts from. The
+  13 optional synonym lists moved from the page (compared word for word);
+  `suggest_columns` keeps the page's order: the AI proposal, else the synonym
+  match, the stock column by its own rule, then no optional field takes a
+  column a required or earlier optional field already uses.
+- `engine/run_settings.py`: `RunSettings`, the typed settings of one run (every
+  default from `planning_defaults`); `effective_settings` applies the mode
+  rules the page's controls applied (special coverage follows the standard
+  coverage without a Standard/Special column; one listing or the fixed
+  configuration plans combined; the fixed configuration keeps no buffer, fills
+  carousels to 1.0 and does not consolidate; outside it the machines, headroom
+  and stock promotion do not apply; class thresholds only while switched on);
+  `build_plan_params` builds `PlanParams`. Also `plan_config`,
+  `program_mapping_active`, `restock_slots_total` and the label parsing for the
+  supply-point and Tools + PPE choices, with the page's exact meaning.
+- The page builds its planner parameters, programme flag and restock total
+  through these functions.
+- Verification: 25 new tests (`test_run_settings.py`, `test_column_suggest.py`),
+  red before the modules existed. The synthetic gate is unchanged; the four
+  scenarios exported with the technical sheets on are identical to v34.60, and
+  so are two extra one-off scenarios covering per-class thresholds, a
+  Standard/Special column with its own coverage and special tools as KTC,
+  restock categories, three partitioned supply points, consolidation off and
+  changed sizing factors (plan tables and technical workbook). The private
+  golden gate on a real customer workbook is required before merging.
+  `python tools/check.py --tests`: 2,225 passed / 25 skipped / 0 failed
+  (Python 3.11; the same on Python 3.10).
+
+## [v34.61] - Tool list, export tables and setting defaults move into the engine
+
+Preparation for the rewrite: the new app will call the same engine functions
+instead of copying page code. Planning results and exports are byte-identical
+to v34.60 (synthetic manifest unchanged).
+
+- `engine/tool_list.py`: building the planning frame from the mapped sheets,
+  moved from the planner page. `ColumnMapping` holds the source column per
+  field; `mapping_collisions`, `rename_map` and `build_tool_list` (rename, tag,
+  clean text, join Tools and PPE, drop blank codes, column defaults, number,
+  stock and year parsing) return what the page used to show as messages
+  (missing columns per sheet, dropped rows) as data, and the page shows them
+  as before. Also `resolve_override_scope`, `distinct_programs`,
+  `assign_supply_points`, `add_classification_audit_columns` and
+  `apply_export_display_columns` (Std_Special, Forced_to_KTC, Restockable).
+- `engine/export_frames.py`: the Summary, Run_Metadata (57 rows plus the
+  Special and fixed-configuration rows), Audit_Summary, Bucket_Compare and the
+  four distribution tables, moved from the page and `ui/exports_panel.py`. Pure:
+  the caller passes the timestamp and every setting (`RunMetadataInputs`).
+- `engine/planning_defaults.py`: every setting default and choice label in one
+  place (`DEFAULTS`, the operation, supply-point, Tools + PPE, year, duplicate
+  and numbering labels, the fixed-configuration machines, the value limits).
+  The sidebar and main-screen controls read them; the new app will too.
+  Labels that already carried a long dash keep it, so the page and the
+  Run_Metadata values are unchanged.
+- `tests/test_deshadow_guard.py`: the page no longer imports the two sizing
+  constants at all; the guards now require zero bare references and one read
+  of each shared default, as the widget's starting value.
+- Verification: 50 new tests (`test_tool_list.py`, `test_export_frames.py`,
+  `test_planning_defaults.py`, `test_page_defaults.py`), red before the
+  modules existed. The synthetic gate is unchanged. Because the technical
+  sheets (Audit_Summary, Bucket_Compare, Dist_*) are not in the gate's
+  default workbook, all four scenarios were also exported with the technical
+  sheets on, before (v34.60) and after: all 64 sheets identical. The private
+  golden gate on a real customer workbook is required before merging.
+  `python tools/check.py --tests`: 2,200 passed / 25 skipped / 0 failed
+  (Python 3.11).
+
 ## [v34.60] - Quality gate passes on fresh installs and on Windows
 
 Hotfix for the gate introduced in v34.59. Planning results and exports are
