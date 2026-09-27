@@ -35,6 +35,28 @@ change one only after arguing the case with the owner (CLAUDE.md, rule 1).
   10-pack insert catalog about 1.45 packs/month separated Helix from Carousel
   correctly; the old default of 6 to 7 inverted the routing.
 
+## Articles on several machines (v34.63)
+
+- The Program column is mapped per machine. A location cell may name several
+  machines, separated by `+`, `&`, `;` or `,` (`/` and `-` are part of a name).
+  Labels are read in one spelling: `AB 101`, `ab-101` and `AB101` are `AB-101`;
+  a bare number takes the letter prefix of the nearest earlier machine
+  (`AB-100 +101` names `AB-100` and `AB-101`).
+- Every machine is mapped to a supply point or to "Not planned here". A
+  dropdown starts empty; the run waits until every machine has a choice.
+- D1 Consumption: an article listed for k machines gives each machine an
+  equal share (1/k); a supply point receives the shares of the listed machines
+  mapped to it (two of three machines on one supply point give 2/3). A machine
+  that is not planned keeps its share out of the plan. Option, off by
+  default: "Count the full consumption in every supply point".
+- D4: an article whose machines are all "Not planned here" stops the run with
+  its code; map a machine (an extra supply point with no machines is fine) or
+  remove the rows. An article is never dropped silently.
+- An article is never KTC and Kanban at once (owner decision 2026-09-27): when
+  one supply point's share makes it KTC, it is KTC in every supply point, each
+  copy sized from its own share.
+- A file without multi-machine cells plans exactly as before.
+
 ## Fixed configuration (existing machines)
 
 - The machines per supply point are given; usable space = physical x (100 -
@@ -51,6 +73,13 @@ change one only after arguing the case with the owner (CLAUDE.md, rule 1).
   exceeds the Helix threshold and the recorded use, highest first, only when all
   their spirals fit. It changes the cabinet type and the takeover maximum,
   nothing else.
+- Are the configured machines enough (v34.63)? Per supply point and machine
+  type, "Needed by not placed" is the space (spirals, compartments or boxes)
+  the not-placed articles need in their own machine type, with the fit's
+  footprint; "Extra machines (estimate)" = ceil(max(0, needed - free) /
+  usable units per machine), usable after the headroom. A type without
+  machines is listed when it is needed. The page says it in one line per
+  supply point.
 
 ## Takeover sheets
 
@@ -62,6 +91,14 @@ change one only after arguing the case with the owner (CLAUDE.md, rule 1).
   articles hold nothing in the KTC.
 - Replicate mode shares one stock pool across supply points, filled in supply
   point order; with a Program mapping each supply point uses its own stock.
+- D5 (v34.63), when a cell names several machines: one stock pool per article
+  (Listing, Code), its stock in the list with each source row that reaches the
+  plan counted once (a row whose machines are all "Not planned here" adds
+  none). The pool fills the article's supply points in supply-point order with
+  whole packs up to each maximum; the rest stays at the HLO on the first
+  supply point's line, the other lines show 0 at the HLO, and a "Hinweis"
+  column names the other supply points ("Bestand geteilt mit SP 2"). Stock is
+  never counted twice across the sheets.
 - In machine data, the maximum stock counts pieces: Helix = 22 x VPE per spiral,
   Carousel = compartments x VPE.
 
@@ -76,6 +113,14 @@ change one only after arguing the case with the owner (CLAUDE.md, rule 1).
   KROMI-property successor) and Kanban articles once (customer property).
 - A provided structure word for step drills gives code 14; threading inserts stay
   code 12.
+- D6 (v34.63): an article planned in several supply points because a cell
+  names several machines has one number. The KTC counter and the
+  dimension-scheme variants advance once per article, and every copy shows the
+  article's number. A file split over several supply points gets exactly the
+  Article setup and numbers of the same file with each article in one supply
+  point. Replicate copies keep one number per row (with the documented gaps),
+  and so does an article repeated on single-machine rows in a file without
+  multi-machine cells.
 
 ## Restocking (machine database)
 

@@ -108,10 +108,13 @@ def build_per_sp_summary(
         return pd.DataFrame(compact_rows), pd.DataFrame(detail_rows)
 
     # ---- Combined mode: original SupplyPoint-grouped path (unchanged) ----
-    # Build a SP -> programmes list mapping from the program_to_sp_map
+    # Build a SP -> machines list from the per-machine map (v34.63: one
+    # entry per machine; 0 = "Not planned here" belongs to no supply point)
     sp_progs: dict[int, list[str]] = {}
     if program_to_sp_map:
         for prog, sp in program_to_sp_map.items():
+            if int(sp) < 1:
+                continue
             sp_progs.setdefault(int(sp), []).append(prog if prog else "(blank)")
 
     # Index bucket_plans by label for easy lookup

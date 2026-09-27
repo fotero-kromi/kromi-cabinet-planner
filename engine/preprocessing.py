@@ -16,6 +16,12 @@ from typing import Any
 import pandas as pd
 
 from .classification import first_valid_product_category_text
+from .multi_location import (
+    ARTICLE_STOCK_COL,
+    SHARED_COL,
+    SOURCE_COL,
+    finalize_planning_rows,
+)
 from .text_utils import (
     first_nonempty,
     first_positive_number,
@@ -102,6 +108,10 @@ def prepare_planning_base(
             info["rows_after_year_filter"] = len(base)
     info["consumption_after_year"] = _cons_sum(base)
 
+    # Articles on several machines (v34.63): the shared flag and the stock
+    # pool follow the rows the year filter kept. No-op for other files.
+    base = finalize_planning_rows(base)
+
     if dedup_mode == "none":
         info["rows_after_dedup"] = len(base)
         info["consumption_after_dedup"] = _cons_sum(base)
@@ -185,6 +195,15 @@ def prepare_planning_base(
     # of every merged row belong to the article, so they add up.
     if "Stock_pcs" in base.columns:
         agg_spec["Stock_pcs"] = "sum"
+    # Articles on several machines (v34.63, only when a cell names several):
+    # the cell texts like the Program column, the flag and the pool per
+    # article (the same on every row of a group).
+    if SOURCE_COL in base.columns:
+        agg_spec[SOURCE_COL] = agg_spec["Program"] if "Program" in agg_spec else first_nonempty
+    if SHARED_COL in base.columns:
+        agg_spec[SHARED_COL] = "max"
+    if ARTICLE_STOCK_COL in base.columns:
+        agg_spec[ARTICLE_STOCK_COL] = "max"
 
     # Legible precondition (audit M2): the aggregation below requires the
     # prepared planning columns; a caller handing over a raw or mis-mapped

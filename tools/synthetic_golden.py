@@ -2,10 +2,11 @@
 
 The golden and export capture tools need a private customer workbook, so the
 byte-identity gates only ran by hand. This module generates an anonymous,
-deterministic tool catalog, drives the planner page through four scenarios
+deterministic tool catalog, drives the planner page through five scenarios
 (standard, capped with two replicated supply points, fixed configuration with
-a Program mapping, stock and the stock-based Helix promotion, and the
-numbering-only mode) and reduces each run to digests: the persisted plan
+a Program mapping, stock and the stock-based Helix promotion, the
+numbering-only mode, and (v34.63) a fixed configuration whose location cells
+name several machines) and reduces each run to digests: the persisted plan
 tables and the exported workbook. tests/test_synthetic_golden.py compares
 them with the committed manifest in every test run, so a refactor that
 changes a result fails in the suite and in CI.
@@ -115,6 +116,26 @@ def build_catalog(n: int = 360, seed: int = SEED) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=COLUMNS)
 
 
+#: Location cells naming several machines, in the spelling variants of a real
+#: list (invented labels). AB-102 is outside the plan in the scenario.
+MULTI_VARIANTS = ("AB-100 + AB 101", "AB-100 +101", "AB-101 + 102", "AB-100 +101 + 102")
+MULTI_SHARE = 0.15
+
+
+def build_multi_catalog(seed: int = SEED + 63) -> pd.DataFrame:
+    """The catalog with machine labels as locations (v34.63).
+
+    Line A becomes machine AB-100, Line B machine AB-101; about 15 % of the
+    rows name two or three machines in the spelling variants above.
+    """
+    rng = random.Random(seed)
+    frame = build_catalog()
+    single = frame["Location"].map({"Line A": "AB-100", "Line B": "AB-101"})
+    frame["Location"] = [rng.choice(MULTI_VARIANTS) if rng.random() < MULTI_SHARE else loc
+                         for loc in single]
+    return frame
+
+
 def catalog_bytes(frame: Optional[pd.DataFrame] = None) -> bytes:
     bio = BytesIO()
     with pd.ExcelWriter(bio, engine="openpyxl") as writer:
@@ -162,6 +183,20 @@ SCENARIOS: Dict[str, Dict[str, Any]] = {
         "controls": {"ks_op_mode": "Only article number assignment"},
         "mapping": dict(_BASE_MAP),
         "download": "article setup",
+    },
+    # v34.63: articles on several machines; three machines on two supply
+    # points, one machine not planned here.
+    "multi_location": {
+        "catalog": "multi",
+        "controls": {"ks_op_mode": "Fixed configuration (existing machines)", "ks_n_sp": 2,
+                     "ks_consumption_months": 12.0, "ks_helix_threshold": 6.0,
+                     "ks_fixed_headroom": 10.0,
+                     "ks_fixed_helix_1": 1, "ks_fixed_carousel_1": 1,
+                     "ks_fixed_helix_2": 1, "ks_fixed_carousel_2": 1},
+        "mapping": {**_BASE_MAP, "cm_program": "Location", "cm_stock": "Stock",
+                    "cm_systemtyp": "System"},
+        "programs": {"AB-100": 1, "AB-101": 2, "AB-102": 0},
+        "download": "plan workbook",
     },
 }
 
@@ -248,7 +283,7 @@ def run_scenario(name: str, work_dir: str) -> Dict[str, Any]:
     db_path = str(Path(work_dir) / f"{name}.db")
     os.environ["KROMI_DB_PATH"] = db_path
     os.environ.setdefault("KROMI_FILE_PREFS_PATH", str(Path(work_dir) / "file_prefs.json"))
-    frame = build_catalog()
+    frame = build_multi_catalog() if spec.get("catalog") == "multi" else build_catalog()
     raw = catalog_bytes(frame)
     cols = list(frame.columns)
 

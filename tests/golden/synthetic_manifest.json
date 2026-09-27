@@ -31,7 +31,24 @@
         "sha256": "45e2500d508e61cce8ebf0a2a8edda74677d86766c51ce262c5a066a28812d10"
       },
       "workbook": {
-        "sha256": "746fb7f02e166f0cc98a63c68eb78736478041ff6afb4a870e165637e726e3a0"
+        "sha256": "dcf57a9a0d13a36e086b5de87f55f1cba6fa851955b77d24bc2fcf41da754783"
+      }
+    },
+    "multi_location": {
+      "buckets": {
+        "rows": 3,
+        "sha256": "fc22122945b4c654d9d6bcd6cb42c9f4702d5124de9645506e51bee4ec262c0e"
+      },
+      "grand": {
+        "rows": 1,
+        "sha256": "52de805d104436e41587a2f0e11a4f6d16691238b82c3bb5fa9f24b06b459bbe"
+      },
+      "pertool": {
+        "rows": 399,
+        "sha256": "30ed8ce4708b3dd7c592d66d597edc77f22aa6f226a5acefbff40b78ecef0eb2"
+      },
+      "workbook": {
+        "sha256": "6e3566c5b459ed2424fcddfaf99227ab4eade7e1f92b7486812f4ad55b6b1e37"
       }
     },
     "numbering_only": {
