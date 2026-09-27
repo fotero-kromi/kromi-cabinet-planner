@@ -4,8 +4,8 @@ Date: 2026-09-23. Status: the owner decided to prototype a rewrite on a branch
 (`rewrite/fastapi-react`) and confirmed the stack, the database and where it
 runs (owner decisions below). The vertical slice is complete with PR C: back
 end (PR A), front end (PR B), Docker setup and browser end-to-end test (PR C).
-Next: the front-end refactor, then the redesign from approved mockups
-(decisions of 2026-09-24 below).
+The front-end refactor that prepares the redesign is done; the redesign
+starts from mockups the owner approves (decisions of 2026-09-24 below).
 
 ## Why
 
@@ -149,3 +149,11 @@ by either stack); FastAPI + React about 28 to 37 in total; NiceGUI about 19 to 2
    - the screens are split into small reusable components (file drop, sheet
      picker, mapping grid, settings form, totals, article table, run status).
 3. The redesign starts only from mockups the owner has approved.
+
+Refactor done: `frontend/src/lib/settingFields.ts` holds the setting
+descriptions (the "advanced" marks are a first proposal, to be settled with the
+mockups; the operation modes that hide a field are the Streamlit page's rules),
+`SettingsForm` renders them, and the screens are built from the components in
+`frontend/src/components/`. Screens, requests and results are unchanged: the
+existing front-end tests pass unedited and the end-to-end workbook digest is
+the same.

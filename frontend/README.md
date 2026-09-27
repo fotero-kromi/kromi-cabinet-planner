@@ -39,6 +39,22 @@ the CI front-end job fails while `schema.d.ts` differs from it.
 ## Layout
 
 - `src/api/`: the generated schema types and the client (`client.ts`).
-- `src/lib/`: the column mapping and the settings, plain functions with tests.
-- `src/steps/`: the four screens (upload, sheet and columns, settings, run and results).
+- `src/lib/`: plain functions with tests.
+  - `settingFields.ts`: one description per setting (kind, label, help, group,
+    advanced or not, the operation modes that hide it, when it shows). The
+    settings form is rendered from it; `NOT_ON_FORM` lists the settings it
+    leaves out, with the reason.
+  - `settings.ts`, `mapping.ts`, `run.ts`, `upload.ts`: defaults, checks and
+    the run request.
+- `src/components/`: small reusable pieces, each for one job.
+  - `settings/`: `SettingsForm` renders any list of setting descriptions;
+    `SettingInput` renders one by its kind.
+  - `upload/FileDrop`, `mapping/` (`SheetPicker`, `DataPreview`, `MappingGrid`,
+    `MappingProblems`), `results/` (`Totals`, `IssueList`, `BucketTable`,
+    `ArticleTable`, `RunStatus`), `DataGrid`, `ErrorAlert`.
+- `src/steps/`: the four screens; each wires its components to the API.
 - `src/test/`: test setup, API stand-in and fixtures.
+
+To add a setting to the form: add its description to `SETTING_FIELDS` (the
+tests check that it names a real setting of the right type), or list it in
+`NOT_ON_FORM` with the reason.
