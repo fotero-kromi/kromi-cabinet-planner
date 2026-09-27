@@ -67,7 +67,7 @@ must give exactly what the Streamlit app gives, as recorded in
   reading it back.
 
 Each scenario joins the new app's parity tests when its screen is built; the
-rewrite is at parity when all four match. A change on `main` that changes
+rewrite is at parity when all five match (v34.63 added `multi_location`). A change on `main` that changes
 results updates the manifest there (`--update`); after the merge into this
 branch, the new app's parity tests fail until the new app gives the same
 result, and `plan_result` is regenerated with `--update` on this branch.
@@ -98,6 +98,15 @@ result, and `plan_result` is regenerated with `--update` on this branch.
      for Docker Desktop and Rancher Desktop: `docs/New_App_Docker.md`.
 2. Screen by screen to parity. Engine fixes ship from `main` and reach the branch
    by merge.
+   - v34.63 (articles on several machines, merged in): the engine has it; the
+     new app still needs the per-machine Program mapping with "Not planned
+     here", no default and the two blocking checks (a machine without a
+     choice, an article without a planned machine); the option "Count the
+     full consumption in every supply point", stored with the run; and the
+     capacity readout (the two `Fixed_Configuration` columns and one line per
+     supply point). Until then the back end keeps the v34.62 per-programme
+     assignment (`tool_list.assign_supply_points`), which treats a cell
+     naming several machines as one programme.
 
 Page logic still to move into the engine with the next release on `main`:
 which sheet is preselected as the Tools sheet (the first sheet whose name
