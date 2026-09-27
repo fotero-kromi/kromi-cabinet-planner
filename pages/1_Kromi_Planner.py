@@ -222,14 +222,22 @@ from engine.tool_list import (
     ColumnMapping,
     add_classification_audit_columns,
     apply_export_display_columns,
-    assign_supply_points,
     build_tool_list,
-    distinct_programs,
     effective_mapping,
     mapping_collisions,
     resolve_override_scope,
     scope_value,
-    unassigned_programs,
+)
+from engine.multi_location import (
+    NOT_PLANNED,
+    NOT_PLANNED_LABEL,
+    distinct_machines,
+    expand_locations,
+    machine_stats,
+    mapping_summary,
+    multi_machine_rows,
+    shared_article_count,
+    unassigned_machines,
 )
 from engine.export_frames import (
     audit_frame,
@@ -246,6 +254,7 @@ from engine.fixed_config import (
     STATUS_NOT_PLACED,
     MachineSet,
     capacity_rows as _fixed_capacity_rows,
+    capacity_verdicts as _fixed_capacity_verdicts,
     usable_capacity as _fixed_usable_capacity,
 )
 
@@ -2331,31 +2340,42 @@ st.caption(
     f" **Overrides scope**: `{effective_customer}__{effective_site}`"
 )
 
-# Program → Supply Point mapping
+# Program → Supply Point mapping, per machine (v34.63): a location cell may
+# name several machines ("AB-100 + AB 101"); every machine is mapped to a
+# supply point or set to "Not planned here" (engine/multi_location.py).
 program_to_sp_map: Dict[str, int] = {}
 program_mapping_active = _program_mapping_active(
     work, _mapping, n_supply_points=int(n_supply_points), op_mode=op_mode)
+_ml_multi_rows = multi_machine_rows(work) if program_mapping_active else 0
+_ml_full_consumption = False
+_ml_info = None
 
 if program_mapping_active:
     st.subheader("Program → Supply Point mapping")
     st.caption(
         f"You have chosen **{int(n_supply_points)} supply points** and a Program column "
-        f"(`{col_program}`). Assign every distinct programme to the supply point that will "
-        f"physically stock its tools. Consumption will flow into the matched SP; same-SKU "
-        f"used across multiple programmes at the same SP will accumulate."
+        f"(`{col_program}`). Assign every machine (programme) to the supply point that will "
+        f"physically stock its tools, or to '{NOT_PLANNED_LABEL}'. Consumption will flow "
+        f"into the matched SP; same-SKU used across multiple programmes at the same SP "
+        f"will accumulate."
     )
+    if _ml_multi_rows:
+        st.caption(
+            f"{_ml_multi_rows} rows name several machines. Such an article is planned in "
+            "every supply point its machines map to; its consumption is shared equally "
+            "between its machines."
+        )
+        _ml_full_consumption = bool(st.checkbox(
+            "Count the full consumption in every supply point",
+            key="ks_ml_full_consumption",
+            help="Off (default): each machine gets an equal share of the article's "
+                 "consumption. On: every supply point sizes with the full consumption "
+                 "(conservative sizing).",
+        ))
 
-    # Distinct programmes, sorted with "" (missing) last
-    _programs = distinct_programs(work)
-
-    # Show a hint about how many rows / what consumption is in each programme
-    prog_stats = (
-        work.groupby("Program", dropna=False)
-        .agg(rows=("Code", "count"), consumption=("Consumption_pcs", "sum"))
-        .reset_index()
-    )
-    prog_stats["Program"] = prog_stats["Program"].astype(str)
-    prog_stats_lookup = prog_stats.set_index("Program")
+    # Distinct machines, sorted with "" (missing) last
+    _programs = distinct_machines(work)
+    _machine_stats = machine_stats(work)
 
     # Bulk-assign helpers — without these, 80+ programmes per run is painful
     bulk_col1, bulk_col2 = st.columns([2, 3])
@@ -2377,8 +2397,10 @@ if program_mapping_active:
             for p in _programs:
                 st.session_state[f"prog_sp::{p}"] = int(bulk_target_sp)
 
-    # Per-programme dropdowns — grouped so the list is scannable
+    # Per-machine dropdowns, grouped so the list is scannable. No default:
+    # a dropdown without a stored or chosen value starts empty (D3).
     st.caption(f"Assign each of the **{len(_programs)} programme(s)** to a supply point:")
+    _sp_options = list(range(1, int(n_supply_points) + 1)) + [NOT_PLANNED]
 
     # Render in a compact grid to avoid page-long scroll
     cols_per_row = 3
@@ -2388,7 +2410,7 @@ if program_mapping_active:
         for j, prog in enumerate(batch):
             with row_cols[j]:
                 prog_label = "(blank / missing)" if prog == "" else prog
-                stats = prog_stats_lookup.loc[prog] if prog in prog_stats_lookup.index else None
+                stats = _machine_stats.get(prog)
                 if stats is not None:
                     help_txt = f"{int(stats['rows'])} row(s), {float(stats['consumption']):,.0f} pcs/yr"
                 else:
@@ -2396,45 +2418,28 @@ if program_mapping_active:
                 key = f"prog_sp::{prog}"
                 assigned_sp = st.selectbox(
                     prog_label,
-                    options=list(range(1, int(n_supply_points) + 1)),
-                    format_func=lambda n: f"SP {n}",
+                    options=_sp_options,
+                    index=None,
+                    placeholder="Choose a supply point",
+                    format_func=lambda n: NOT_PLANNED_LABEL if n == NOT_PLANNED else f"SP {n}",
                     key=key,
                     help=help_txt,
                 )
-                program_to_sp_map[prog] = int(assigned_sp)
+                if assigned_sp is not None:
+                    program_to_sp_map[prog] = int(assigned_sp)
 
-    # Summary of the mapping
+    # Summary of the mapping, after the consumption shares
     with st.expander("Mapping summary (consumption per SP after programme routing)"):
-        sp_totals: Dict[int, Dict[str, float]] = {
-            sp: {"rows": 0, "consumption": 0.0, "programmes": []}
-            for sp in range(1, int(n_supply_points) + 1)
-        }
-        for prog, sp in program_to_sp_map.items():
-            stats = prog_stats_lookup.loc[prog] if prog in prog_stats_lookup.index else None
-            if stats is not None:
-                sp_totals[sp]["rows"] += int(stats["rows"])
-                sp_totals[sp]["consumption"] += float(stats["consumption"])
-                sp_totals[sp]["programmes"].append(
-                    "(blank)" if prog == "" else prog
-                )
-        sp_summary_rows = []
-        for sp, data in sp_totals.items():
-            sp_summary_rows.append({
-                "Supply Point": f"SP {sp}",
-                "Rows": data["rows"],
-                "Annual consumption": int(data["consumption"]),
-                "# programmes": len(data["programmes"]),
-                "Programmes (first 5)": ", ".join(data["programmes"][:5])
-                    + (f" + {len(data['programmes']) - 5} more" if len(data["programmes"]) > 5 else ""),
-            })
         st.dataframe(
-            pd.DataFrame(sp_summary_rows),
+            pd.DataFrame(mapping_summary(work, program_to_sp_map,
+                                         n_supply_points=int(n_supply_points),
+                                         full_consumption=_ml_full_consumption)),
             width="stretch",
             hide_index=True,
         )
 
-    # Validation: every distinct programme must have an SP picked.
-    unassigned = unassigned_programs(_programs, program_to_sp_map)
+    # Validation: every distinct machine must have a supply point picked.
+    unassigned = unassigned_machines(_programs, program_to_sp_map)
     if unassigned:
         st.error(
             f" {len(unassigned)} programme(s) are unassigned. Every programme must "
@@ -2444,14 +2449,29 @@ if program_mapping_active:
         )
         st.stop()
 
-    # Apply the mapping to the working dataframe — BEFORE dedup.
-    # Any unmapped rows (shouldn't happen after validation) get SP 1 as safety
-    _n_default_sp = assign_supply_points(work, program_to_sp_map)
-    if _n_default_sp:
-        st.warning(
-            f"Safety net: {_n_default_sp} row(s) did not match any mapped programme "
-            f"and were assigned to SP 1 by default."
+    # Apply the mapping to the working dataframe BEFORE dedup: one copy per
+    # supply point an article's machines map to, with its consumption share.
+    work, _ml_info = expand_locations(work, program_to_sp_map,
+                                      full_consumption=_ml_full_consumption)
+    # An article with no planned machine stops the run; never dropped (D4).
+    if _ml_info.unplanned_articles:
+        _ml_codes = [code for _listing, code in _ml_info.unplanned_articles]
+        st.error(
+            f" {len(_ml_codes)} article(s) have no planned machine: every machine "
+            f"they are listed for is set to '{NOT_PLANNED_LABEL}'. Map one of their "
+            "machines to a supply point (an extra supply point with no machines is "
+            "fine) or remove the rows. Articles: "
+            f"{', '.join(repr(c) for c in _ml_codes[:10])}"
+            + (f" (+{len(_ml_codes) - 10} more)" if len(_ml_codes) > 10 else "")
         )
+        st.stop()
+    if _ml_info.not_planned_machines:
+        st.caption(
+            f"{NOT_PLANNED_LABEL}: {', '.join(m or '(blank)' for m in _ml_info.not_planned_machines)}. "
+            "Their share of each article's consumption stays out of the plan"
+            + (f"; {_ml_info.dropped_rows} row(s) naming only such machines are left out "
+               "(their articles are planned through their other rows)."
+               if _ml_info.dropped_rows else "."))
 else:
     # No program mapping path: the existing single-supply-point behavior
     pass
@@ -2589,6 +2609,7 @@ _current_fingerprint = compute_run_fingerprint(FingerprintInputs(
     max_ai_items=max_ai_items, batch_size=batch_size,
     trim_ai_reason=trim_ai_reason, ai_concurrency=ai_concurrency,
     program_to_sp_map=program_to_sp_map, program_mapping_active=program_mapping_active,
+    full_consumption_shared=_ml_full_consumption,
     op_mode=op_mode, max_carousels_cap=max_carousels_cap,
     special_ktc_enabled=st.session_state.get("ks_special_ktc", False),
     effective_customer=effective_customer, effective_site=effective_site,
@@ -3328,6 +3349,13 @@ if program_mapping_active:
         f" Program→SP mapping active: {len(program_to_sp_map)} programmes mapped across "
         f"{int(n_supply_points)} supply points — " + " | ".join(sp_lines)
     )
+    # Articles on several machines (v34.63): never KTC and Kanban at once.
+    if _plan_result.shared_ktc_copies:
+        st.caption(
+            f"{_plan_result.shared_ktc_copies} supply-point copies of articles on several "
+            "machines are KTC although their consumption share is below the threshold: "
+            "the article is KTC at another supply point, and an article is never KTC "
+            "and Kanban at once.")
 
 # Spiral Hogs audit — the snapshot was taken inside run_plan at the historical
 # position (before bucket planning writes rebalanced routing back), so the
@@ -3617,12 +3645,16 @@ if op_mode == FIXED_MODE:
     _fx_labels = {}
     if program_mapping_active:
         for _prog, _sp in sorted(program_to_sp_map.items(), key=lambda kv: (kv[1], kv[0])):
-            _fx_labels.setdefault(f"SP {_sp}", []).append(_prog or "(blank)")
+            if _sp != NOT_PLANNED:
+                _fx_labels.setdefault(f"SP {_sp}", []).append(_prog or "(blank)")
     _fx_cap = pd.DataFrame(_fixed_capacity_rows(bucket_plans))
     if not _fx_cap.empty:
         _fx_cap["Supply point"] = _fx_cap["Supply point"].map(
             lambda lbl: f"{lbl} ({', '.join(_fx_labels[lbl])})" if lbl in _fx_labels else lbl)
         st.dataframe(_fx_cap, width="stretch", hide_index=True)
+    # Are the configured machines enough? One line per supply point (v34.63).
+    for _fx_line in _fixed_capacity_verdicts(bucket_plans):
+        st.markdown(_fx_line)
     if _fx_not:
         st.warning(
             f"{_fx_not} article(s) are not placed: no space was left in the "
@@ -3997,11 +4029,20 @@ _distribution_basis_fragment()
 # whether the build runs or a cached copy is served.
 apply_export_display_columns(work)
 
+# Articles on several machines (v34.63): the Run_Metadata rows, only when a
+# location cell names several machines.
+_ml_meta = ({
+    "multi_rows": _ml_multi_rows,
+    "shared_articles": shared_article_count(work),
+    "full_consumption": _ml_full_consumption,
+    "not_planned_machines": _ml_info.not_planned_machines if _ml_info else (),
+} if (program_mapping_active and _ml_multi_rows) else None)
+
 @st.fragment
 def _exports_fragment():
     """Thin shell (v34.40): the panel lives in ui.exports_panel; every value
     it needs is passed explicitly."""
-    exports_panel.render(OPENAI_MODEL=OPENAI_MODEL, _SCRIPT_DIR=_SCRIPT_DIR, _plan_cfg=_plan_cfg, _plan_key=_plan_key, _restock_categories=_restock_categories, _restock_slots_total=_restock_slots_total, _split_coverage=_split_coverage, ai_batches_failed=ai_batches_failed, ai_batches_run=ai_batches_run, ai_items_run=ai_items_run, ai_missing_responses=ai_missing_responses, base_info=base_info, bucket_plans=bucket_plans, buf_pct=buf_pct, calc_mode=calc_mode, col_regrind=col_regrind, col_restock=col_restock, col_stdspecial=col_stdspecial, col_systemtyp=col_systemtyp, coverage_days=coverage_days, coverage_days_special=coverage_days_special, effective_customer=effective_customer, effective_site=effective_site, enable_pack_hint_extraction=enable_pack_hint_extraction, enable_rebalancer=enable_rebalancer, force_screws_accessories_kanban=force_screws_accessories_kanban, grand=grand, helix_threshold=helix_threshold, ktc_id_input=ktc_id_input, listings_arg=listings_arg, listings_in_data=listings_in_data, max_carousels_cap=max_carousels_cap, minimum_carousel_allocation=minimum_carousel_allocation, n_sp=n_sp, n_supply_points=n_supply_points, op_mode=op_mode, operational_mode=operational_mode, optional_thresholds_active=optional_thresholds_active, override_stats=override_stats, per_class_thresholds=per_class_thresholds, program_mapping_active=program_mapping_active, program_to_sp_map=program_to_sp_map, sheet_ppe=sheet_ppe, sheet_tools=sheet_tools, sp_mode=sp_mode, total_in_tokens=total_in_tokens, total_out_tokens=total_out_tokens, underuse_threshold_pct=underuse_threshold_pct, usage_threshold=usage_threshold, use_ai=use_ai, use_description_2=use_description_2, validation_issues=validation_issues, vend_stats=vend_stats, _export_name=_export_name, apply_overrides_ui=apply_overrides_ui, consumption_period_months=consumption_period_months, df_audit=df_audit, df_bucket_compare=df_bucket_compare, dist_cabtype=dist_cabtype, dist_cat_rows=dist_cat_rows, dist_cat_vol=dist_cat_vol, dist_system=dist_system, enable_bulk_routing=enable_bulk_routing, multiple_listings=multiple_listings, presentation_compact_df=presentation_compact_df, presentation_detail_df=presentation_detail_df, work=work, override_store_unavailable=_override_store_unavailable)
+    exports_panel.render(OPENAI_MODEL=OPENAI_MODEL, _SCRIPT_DIR=_SCRIPT_DIR, _plan_cfg=_plan_cfg, _plan_key=_plan_key, _restock_categories=_restock_categories, _restock_slots_total=_restock_slots_total, _split_coverage=_split_coverage, ai_batches_failed=ai_batches_failed, ai_batches_run=ai_batches_run, ai_items_run=ai_items_run, ai_missing_responses=ai_missing_responses, base_info=base_info, bucket_plans=bucket_plans, buf_pct=buf_pct, calc_mode=calc_mode, col_regrind=col_regrind, col_restock=col_restock, col_stdspecial=col_stdspecial, col_systemtyp=col_systemtyp, coverage_days=coverage_days, coverage_days_special=coverage_days_special, effective_customer=effective_customer, effective_site=effective_site, enable_pack_hint_extraction=enable_pack_hint_extraction, enable_rebalancer=enable_rebalancer, force_screws_accessories_kanban=force_screws_accessories_kanban, grand=grand, helix_threshold=helix_threshold, ktc_id_input=ktc_id_input, listings_arg=listings_arg, listings_in_data=listings_in_data, max_carousels_cap=max_carousels_cap, minimum_carousel_allocation=minimum_carousel_allocation, n_sp=n_sp, n_supply_points=n_supply_points, op_mode=op_mode, operational_mode=operational_mode, optional_thresholds_active=optional_thresholds_active, override_stats=override_stats, per_class_thresholds=per_class_thresholds, program_mapping_active=program_mapping_active, program_to_sp_map=program_to_sp_map, sheet_ppe=sheet_ppe, sheet_tools=sheet_tools, sp_mode=sp_mode, total_in_tokens=total_in_tokens, total_out_tokens=total_out_tokens, underuse_threshold_pct=underuse_threshold_pct, usage_threshold=usage_threshold, use_ai=use_ai, use_description_2=use_description_2, validation_issues=validation_issues, vend_stats=vend_stats, _export_name=_export_name, apply_overrides_ui=apply_overrides_ui, consumption_period_months=consumption_period_months, df_audit=df_audit, df_bucket_compare=df_bucket_compare, dist_cabtype=dist_cabtype, dist_cat_rows=dist_cat_rows, dist_cat_vol=dist_cat_vol, dist_system=dist_system, enable_bulk_routing=enable_bulk_routing, multiple_listings=multiple_listings, presentation_compact_df=presentation_compact_df, presentation_detail_df=presentation_detail_df, work=work, override_store_unavailable=_override_store_unavailable, multi_location_meta=_ml_meta)
 
 
 

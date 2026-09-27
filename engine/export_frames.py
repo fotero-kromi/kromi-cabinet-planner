@@ -16,6 +16,7 @@ import pandas as pd
 from .cabinet_math import SPECIAL_KTC_REASON
 from .fixed_config import FIXED_MODE
 from .fixed_config import run_meta_rows as fixed_run_meta_rows
+from .multi_location import multi_location_meta_rows
 from .plan_config import PlanConfig
 from .routing_rules import classify_standard_special
 from .sizing_factors import SP_MODE_REPLICATE
@@ -207,6 +208,9 @@ class RunMetadataInputs:
     validation_issues: Sequence[str]
     col_stdspecial: Optional[str]
     special_ktc: bool
+    # Articles on several machines (v34.63): only when a location cell names
+    # several machines (engine.multi_location.multi_location_meta_rows).
+    multi_location: Optional[Mapping[str, Any]] = None
 
 
 def run_metadata_rows(i: RunMetadataInputs, *, work: pd.DataFrame,
@@ -260,6 +264,11 @@ def run_metadata_rows(i: RunMetadataInputs, *, work: pd.DataFrame,
         {"Key": "Program→SP mapping", "Value": "active" if i.program_mapping_active else "off"},
         {"Key": "Programmes mapped",
          "Value": len(i.program_to_sp_map) if i.program_mapping_active else 0},
+    ]
+    # Articles on several machines (v34.63): only when a cell names several.
+    if i.multi_location:
+        rows += multi_location_meta_rows(i.multi_location)
+    rows += [
         {"Key": "Customer", "Value": i.effective_customer},
         {"Key": "Site", "Value": i.effective_site},
         {"Key": "Overrides applied",

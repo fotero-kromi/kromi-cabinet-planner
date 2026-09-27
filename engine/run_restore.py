@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, Mapping, Optional
 
+from .multi_location import canonical_location, split_locations
+
 # The sentinel a column-mapping selectbox shows when a field is left unmapped.
 NOT_AVAIL = "— not available —"
 
@@ -91,6 +93,9 @@ CONTROL_KEYS = (
     "ks_fixed_spill",
     "ks_fixed_stock_promo",
     "ks_fixed_stock_months",
+    # Articles on several machines (v34.63): count the full consumption in
+    # every supply point.
+    "ks_ml_full_consumption",
 ) + tuple(
     f"ks_fixed_{kind}_{sp}"
     for sp in range(1, 11)
@@ -130,8 +135,23 @@ def _clean_dict(value: Any) -> Optional[Dict[str, float]]:
 
 
 def _is_program_sp(key: Any, value: Any) -> bool:
+    """A per-machine supply point: 1..n, or 0 for "Not planned here" (v34.63)."""
     return (isinstance(key, str) and key.startswith(PROGRAM_SP_PREFIX)
-            and isinstance(value, int) and not isinstance(value, bool))
+            and isinstance(value, int) and not isinstance(value, bool) and value >= 0)
+
+
+def _program_sp_key(key: str) -> Optional[str]:
+    """The key of a stored machine choice in today's canonical spelling.
+
+    Runs stored before v34.63 kept one key per distinct cell text; a single
+    machine is translated to its canonical label (``ab 101`` -> ``AB-101``),
+    a cell naming several machines is not restored (None): each of its
+    machines needs its own choice.
+    """
+    parts = split_locations(key[len(PROGRAM_SP_PREFIX):])
+    if len(parts) > 1:
+        return None
+    return PROGRAM_SP_PREFIX + (canonical_location(parts[0]) if parts else "")
 
 
 def capture_ui_state(session_state: Mapping[str, Any]) -> Dict[str, Any]:
@@ -199,8 +219,11 @@ def build_seed(
     seed: Dict[str, Any] = {}
     for key, value in (ui_state or {}).items():
         if isinstance(key, str) and key.startswith(PROGRAM_SP_PREFIX):
-            if _is_program_sp(key, value):
-                seed[key] = int(value)
+            target = _program_sp_key(key)
+            # A key already in canonical spelling wins over a translated twin.
+            if (_is_program_sp(key, value) and target is not None
+                    and (target not in seed or key == target)):
+                seed[target] = int(value)
             continue
         if key not in _ALL_KEYS:
             continue
@@ -248,5 +271,11 @@ def restore_summary(
         if (isinstance(key, str) and key.startswith(PROGRAM_SP_PREFIX))
         or (key in _ALL_KEYS and (key in _MAPPING_SET or value is not None))
     ]
-    dropped = sorted(key for key in total if key not in seed)
+    def _restored(key: str) -> bool:
+        if isinstance(key, str) and key.startswith(PROGRAM_SP_PREFIX):
+            target = _program_sp_key(key)
+            return target is not None and target in seed
+        return key in seed
+
+    dropped = sorted(key for key in total if not _restored(key))
     return {"restored": len(total) - len(dropped), "total": len(total), "dropped": dropped}
