@@ -14,7 +14,7 @@
         "sha256": "2f8cd61c8bc9f16786560ab84d2c4ab8c900c84728a5e28b92a1169f19320d7e"
       },
       "workbook": {
-        "sha256": "7d850c8c14e760a34ebd4759112f8900578ff1957b95265e71a0424b30245f13"
+        "sha256": "86a765694e0c7aa752d4bca10d540f25e3ab197a9774bc31a2c229e024eee599"
       }
     },
     "fixed_program_stock": {
@@ -31,7 +31,7 @@
         "sha256": "45e2500d508e61cce8ebf0a2a8edda74677d86766c51ce262c5a066a28812d10"
       },
       "workbook": {
-        "sha256": "dcf57a9a0d13a36e086b5de87f55f1cba6fa851955b77d24bc2fcf41da754783"
+        "sha256": "8400a925612b533e20268c6f24b31ece0bdf16d734fdeb321938e51e2e99d50d"
       }
     },
     "multi_location": {
@@ -82,7 +82,7 @@
         "sha256": "d1c94ef0972d94c66e7f16f9d56779f3e7685480f8058ee0b56e51480aeadea3"
       },
       "workbook": {
-        "sha256": "1f33c55f7da3df88b9610268e3a3a927a70a0e3cbaa760f913cf4dea0bce110b"
+        "sha256": "af8212540fb64d083392c87b706a2b460acdea3eeda9b0e248cc7548230edbdb"
       }
     }
   }

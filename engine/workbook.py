@@ -381,12 +381,15 @@ def build_result_workbook(
         # which also drops per-sheet any column that is entirely empty.
 
         _ktc_id = ktc_id
-        _numbered_plan = None
+        # One numbering for the whole plan (v34.64): the KTC counter and the
+        # Kanban variants run over every row, so every sheet is cut from it
+        # instead of numbering its own rows again (which restarted the counter
+        # on the machine sheets). It also gives one number per article on
+        # several machines (v34.63).
+        _aug_work = augment_for_export(work, _ktc_id)
 
         def _augment(frame):
-            if _numbered_plan is not None:
-                return _numbered_plan.loc[frame.index]
-            return augment_for_export(frame, _ktc_id)
+            return _aug_work.loc[frame.index]
 
         # Re-derive the export sub-frames from the FINAL `work` (post overrides,
         # re-route, bulk routing, rebalancing, buffer) so the per-sheet values are
@@ -407,11 +410,6 @@ def build_result_workbook(
         # integrity checks on the final state — the rebalancer and capacity buffer
         # mutate `work` after the preview-stage check, so this is the authoritative
         # verification of what ships.
-        _aug_work = _augment(work)
-        if "Location_Shared" in work.columns:
-            # Articles on several machines (v34.63): one number per article
-            # needs the whole plan, so every sheet is cut from its numbers.
-            _numbered_plan = _aug_work
         _result_view = _user_view(_aug_work)
         _ktc_view = _user_view(_augment(df_ktc))
         _kanban_view = _user_view(_augment(df_kanban))
