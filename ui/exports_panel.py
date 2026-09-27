@@ -141,6 +141,7 @@ def render(
     presentation_detail_df,
     work,
     override_store_unavailable=False,
+    multi_location_meta=None,
 ):
     """Render the Export and Presentation panel; body verbatim from the page."""
     if st.session_state.get("_exports_key") != _plan_key:
@@ -185,6 +186,7 @@ def render(
         total_out_tokens=total_out_tokens, validation_issues=validation_issues,
         col_stdspecial=col_stdspecial,
         special_ktc=bool(st.session_state.get("ks_special_ktc", False)),
+        multi_location=multi_location_meta,
     ), work=work, bucket_plans=bucket_plans)
     df_run_meta = pd.DataFrame(_run_meta_rows)
 

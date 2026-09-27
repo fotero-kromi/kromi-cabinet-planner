@@ -106,8 +106,13 @@ def test_fixed_workbook_has_capacity_and_not_placed_sheets():
     wb, problems = _workbook(res)
     assert problems == [], problems
     cap = _sheet_frame(wb, "Fixed_Configuration")
-    assert list(cap["Machine"]) == ["Helix"]
+    # v34.63: the Carousel has no machine, but the articles without space need
+    # one, so it is listed with the estimate of machines to add.
+    assert list(cap["Machine"]) == ["Helix", "Carousel"]
     assert int(cap.loc[0, "Usable"]) == 7 and int(cap.loc[0, "Machines"]) == 1
+    assert int(cap.loc[1, "Machines"]) == 0
+    assert int(cap.loc[1, "Needed by not placed"]) > 0
+    assert int(cap.loc[1, "Extra machines (estimate)"]) >= 1
     miss = _sheet_frame(wb, "Not_placed")
     assert len(miss) == n_not
     assert "Placement_Note" in miss.columns
@@ -278,6 +283,8 @@ def test_program_mapping_places_each_location_in_its_own_machines(monkeypatch, t
     at.session_state["_pending_restore"] = seed
     at.run()
     next(s for s in at.selectbox if s.key == "cm_program").select("Area").run()
+    # v34.63: no machine dropdown starts on a supply point; choose every one.
+    next(s for s in at.selectbox if s.key == "prog_sp::KTC-A").select(1).run()
     next(s for s in at.selectbox if s.key == "prog_sp::KTC-B").select(2).run()
     at.session_state["_force_run"] = True
     at.run()

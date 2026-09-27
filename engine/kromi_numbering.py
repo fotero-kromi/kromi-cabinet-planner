@@ -146,6 +146,25 @@ class KromiRuleset:
 # The single, universal ruleset. KTC-ID is supplied per call.
 KROMI_RULESET = KromiRuleset(name="KROMI", code_matrix=KROMI_CODE_MATRIX)
 
+# Articles on several machines (v34.63, owner decision D6): rows flagged in
+# this column are copies of one article (Listing, Code) in several supply
+# points. They take one number: the counter and the variants advance once per
+# article. Replicate copies carry no flag and keep one number per row.
+SHARED_COL = "Location_Shared"
+
+
+def _shared_articles(df: pd.DataFrame) -> "pd.Series | None":
+    """(Listing, Code) for flagged rows, None elsewhere; None without the flag."""
+    if SHARED_COL not in df.columns:
+        return None
+    flag = df[SHARED_COL].fillna(False).astype(bool)
+    listing = (df["Listing"].astype(str) if "Listing" in df.columns
+               else pd.Series("", index=df.index))
+    code = df["Code"].astype(str) if "Code" in df.columns else pd.Series("", index=df.index)
+    # Built cell by cell so an unflagged row is always None, never NaN.
+    return pd.Series([(lst, c) if f else None for lst, c, f in zip(listing, code, flag)],
+                     index=df.index, dtype=object)
+
 
 def _digits_only(text: object) -> str:
     """Return the digit characters from text, in order of appearance."""
@@ -274,14 +293,28 @@ def assign_kromi_numbers(df: pd.DataFrame, ktc_id: str,
         base_keys.append(ktc_id + code + dim)
 
     out["_kromi_base"] = base_keys
-    out["_kromi_variant"] = out.groupby("_kromi_base").cumcount()
+    arts = _shared_articles(out)
+    if arts is None:
+        out["_kromi_variant"] = out.groupby("_kromi_base").cumcount()
+    else:
+        # A flagged article's copies after its first row take no variant.
+        repeat = arts.notna() & arts.duplicated()
+        variant = pd.Series(0, index=out.index)
+        variant[~repeat] = out.loc[~repeat].groupby("_kromi_base").cumcount()
+        out["_kromi_variant"] = variant
 
     numbers: list[str] = []
-    for (_, row), variant in zip(out.iterrows(), out["_kromi_variant"]):
-        numbers.append(
-            build_kromi_number(ktc_id, row.get(tool_class_col),
-                               row.get(description_col), int(variant), ruleset)
-        )
+    first: dict = {}
+    for (idx, row), variant in zip(out.iterrows(), out["_kromi_variant"]):
+        art = None if arts is None else arts.at[idx]
+        if art is not None and art in first:
+            numbers.append(first[art])
+            continue
+        number = build_kromi_number(ktc_id, row.get(tool_class_col),
+                                    row.get(description_col), int(variant), ruleset)
+        if art is not None:
+            first[art] = number
+        numbers.append(number)
     out[output_col] = numbers
     out = out.drop(columns=["_kromi_base", "_kromi_variant"])
     return out
@@ -315,13 +348,30 @@ def assign_split_numbers(df: pd.DataFrame, ktc_id: str,
     is_ktc = system == "KTC"
 
     numbers = pd.Series([pd.NA] * len(out), index=out.index, dtype="object")
+    arts = _shared_articles(out)
 
-    # KTC rows: running counter, 1-based, in result order.
-    for counter, idx in enumerate(out.loc[is_ktc].index, start=1):
+    # KTC rows: running counter, 1-based, in result order. A flagged article
+    # (v34.63) takes one step; its other copies repeat the number.
+    by_article: dict = {}
+    counter = 0
+    for idx in out.loc[is_ktc].index:
+        art = None if arts is None else arts.at[idx]
+        if art is not None and art in by_article:
+            numbers.loc[idx] = by_article[art]
+            continue
+        counter += 1
         numbers.loc[idx] = build_ktc_number(ktc_id, counter)
+        if art is not None:
+            by_article[art] = numbers.loc[idx]
 
-    # Everything else: the dimension/description (legacy) scheme.
+    # Everything else: the dimension/description (legacy) scheme. A flagged
+    # copy of an article that is KTC elsewhere shows the KTC number.
     rest = out.loc[~is_ktc]
+    if arts is not None and by_article:
+        takes_ktc = [idx for idx in rest.index if arts.at[idx] in by_article]
+        for idx in takes_ktc:
+            numbers.loc[idx] = by_article[arts.at[idx]]
+        rest = rest.drop(index=takes_ktc)
     if len(rest) > 0:
         numbered = assign_kromi_numbers(
             rest, ktc_id=ktc_id, tool_class_col=tool_class_col,
@@ -470,14 +520,33 @@ def build_article_setup(df: pd.DataFrame, ktc_id: str,
 
     # Variant occupancy across the WHOLE frame (per-SP duplicates included):
     # successors start after the highest variant any Result-sheet number used.
+    # A flagged article (v34.63) occupies one variant, and none when it is KTC
+    # in another supply point (its copies carry the KTC number).
+    arts = _shared_articles(numbered)
+    ktc_arts = (set() if arts is None
+                else set(arts[(numbered["System"] == "KTC") & arts.notna()]))
     counts: dict[str, int] = {}
+    seen: set = set()
     non_ktc = numbered[numbered["System"] != "KTC"]
-    for _, row in non_ktc.iterrows():
+    for idx, row in non_ktc.iterrows():
+        art = None if arts is None else arts.at[idx]
+        if art is not None:
+            if art in ktc_arts or art in seen:
+                continue
+            seen.add(art)
         base = _base_key(row)
         counts[base] = counts.get(base, 0) + 1
 
     dedup_keys = [c for c in ("Listing", "Code") if c in numbered.columns]
     unique = numbered.drop_duplicates(subset=dedup_keys, keep="first")
+    if arts is not None and ktc_arts:
+        # A flagged article that is KTC somewhere is listed as KTC.
+        first_ktc = (numbered[(numbered["System"] == "KTC") & arts.notna()]
+                     .drop_duplicates(subset=dedup_keys, keep="first"))
+        rep = {tuple(r[k] for k in dedup_keys): i for i, r in first_ktc.iterrows()}
+        unique = numbered.loc[[
+            rep.get(tuple(r[k] for k in dedup_keys), i) if arts.at[i] is not None else i
+            for i, r in unique.iterrows()]]
 
     rows: list[dict] = []
     for _, row in unique.iterrows():

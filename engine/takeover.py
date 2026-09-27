@@ -23,6 +23,14 @@ each supply point with the same stock value; there the stock is one pool that
 fills the machines in supply-point order, and what is left is listed once, on
 the first supply point's sheet.
 
+Articles on several machines (v34.63, owner decision D5): when a location cell
+names several machines, the plan carries each article's stock pool
+(``Stock_Article_pcs``: its stock in the source list, each source row counted
+once). The pool fills the article's supply points in order, like Replicate;
+the rest stays at the HLO on the first supply point's line. Lines of an
+article in several supply points carry a note (``Hinweis``) naming the others.
+Stock is never counted twice across the sheets.
+
 Pure and Streamlit-free.
 """
 
@@ -46,8 +54,16 @@ TAKEOVER_COLUMNS: Tuple[str, ...] = (
     "Cust. Prop. Art. Nr.", "Kunden Art. Nr.", "Bezeichnung 1", "Bezeichnung 2",
     "VPE", "im KTC", "am HLO", "Total", "Schranktyp",
 )
+#: Extra column (v34.63), only when an article's stock is shared by several
+#: supply points; filled on those lines only.
+HINWEIS_COL = "Hinweis"
 SHEET_PREFIX = "Takeover sheet SP "
-_COLUMN_WIDTHS = (16, 18, 26, 36, 7, 9, 9, 9, 12)
+_COLUMN_WIDTHS = (16, 18, 26, 36, 7, 9, 9, 9, 12, 28)
+
+#: The pool and flag columns of engine.multi_location (not imported: the
+#: takeover stays independent of the planning modules).
+_POOL_COL = "Stock_Article_pcs"
+_SHARED_COL = "Location_Shared"
 
 _KTC = "KTC"
 
@@ -183,7 +199,10 @@ def build_takeover_frames(work: pd.DataFrame, *, shared_stock: bool = False
     ``Kromi_Art_No`` is the Result sheet's number; KTC rows carry the
     customer-property number). Returns ``[]`` when no stock column was
     mapped. ``shared_stock`` marks a Replicate run whose copies share one
-    stock. Never mutates ``work``.
+    stock. With a ``Stock_Article_pcs`` column (v34.63) every article fills
+    its supply points in order from that pool, and a ``Hinweis`` column names
+    the other supply points on the lines of an article in several. Never
+    mutates ``work``.
     """
     if STOCK_COL not in work.columns or len(work) == 0:
         return []
@@ -219,15 +238,20 @@ def build_takeover_frames(work: pd.DataFrame, *, shared_stock: bool = False
 
     ktc: Dict[Tuple[int, Tuple[str, str]], float] = {}
     hlo: Dict[Tuple[int, Tuple[str, str]], float] = {}
-    if shared_stock:
+    notes: Dict[Tuple[int, Tuple[str, str]], str] = {}
+
+    def _fill_in_order(pools: Optional[Mapping[Tuple[str, str], float]]
+                       ) -> Dict[Tuple[str, str], List[int]]:
+        """Fill each article's supply points in order from one pool; the rest
+        stays on the first line. Without ``pools`` the first copy's stock is
+        the pool (Replicate: the copies repeat one stock)."""
         by_article: Dict[Tuple[str, str], List[int]] = {}
         for sp, art in groups:
             by_article.setdefault(art, []).append(sp)
         for art, sp_list in by_article.items():
             sp_list.sort()
             first = (sp_list[0], art)
-            pool = groups[first]["stock"]          # the copies repeat one stock
-            left = pool
+            left = groups[first]["stock"] if pools is None else pools[art]
             for sp in sp_list:
                 g = groups[(sp, art)]
                 put = min(_whole_packs(left, g["vpe"]), g["packs"] * g["vpe"])
@@ -235,6 +259,25 @@ def build_takeover_frames(work: pd.DataFrame, *, shared_stock: bool = False
                 hlo[(sp, art)] = 0.0
                 left -= put
             hlo[first] = left
+        return by_article
+
+    if shared_stock:
+        _fill_in_order(None)
+    elif _POOL_COL in df.columns:
+        # Articles on several machines (v34.63): one pool per article.
+        pool_vals = pd.to_numeric(df[_POOL_COL], errors="coerce").fillna(0.0).clip(lower=0.0)
+        pools: Dict[Tuple[str, str], float] = {}
+        for i in range(n):
+            art = (listing.iat[i], codes.iat[i])
+            pools[art] = max(pools.get(art, 0.0), float(pool_vals.iat[i]))
+        shared_flag = (df[_SHARED_COL].map(_truthy) if _SHARED_COL in df.columns
+                       else pd.Series(False, index=df.index))
+        shared_arts = {(listing.iat[i], codes.iat[i]) for i in range(n) if shared_flag.iat[i]}
+        for art, sp_list in _fill_in_order(pools).items():
+            if art in shared_arts and len(sp_list) > 1:
+                for sp in sp_list:
+                    others = ", ".join(f"SP {o}" for o in sp_list if o != sp)
+                    notes[(sp, art)] = f"Bestand geteilt mit {others}"
     else:
         for key, g in groups.items():
             put = min(_whole_packs(g["stock"], g["vpe"]), g["packs"] * g["vpe"])
@@ -263,8 +306,10 @@ def build_takeover_frames(work: pd.DataFrame, *, shared_stock: bool = False
             "am HLO": _clean_qty(rest),
             "Total": _clean_qty(put + rest),
             "Schranktyp": g["machine"],
+            HINWEIS_COL: notes.get(key, ""),
         })
-    return [(sp, pd.DataFrame(rows, columns=list(TAKEOVER_COLUMNS)))
+    columns = list(TAKEOVER_COLUMNS) + ([HINWEIS_COL] if notes else [])
+    return [(sp, pd.DataFrame(rows, columns=columns))
             for sp, rows in sorted(out.items())]
 
 
@@ -296,7 +341,7 @@ def write_takeover_sheets(writer: Any, frames: Sequence[Tuple[int, pd.DataFrame]
         frame.to_excel(writer, index=False, sheet_name=name)
         ws = writer.sheets[name]
         ws.freeze_panes = "A2"
-        for i, width in enumerate(_COLUMN_WIDTHS, start=1):
+        for i, width in enumerate(_COLUMN_WIDTHS[:len(frame.columns)], start=1):
             ws.column_dimensions[get_column_letter(i)].width = width
 
 

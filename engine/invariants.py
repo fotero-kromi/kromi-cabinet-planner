@@ -274,6 +274,18 @@ def check_kromi_uniqueness(df: pd.DataFrame, col: str = "Kromi_Art_No") -> list[
     out: list[str] = []
     vals = df[col].fillna("").astype(str).str.strip()
     nonblank = vals[(vals != "") & (~vals.str.lower().isin(["nan", "none"]))]
+    if "Location_Shared" in df.columns and "Code" in df.columns:
+        # v34.63: the copies of an article on several machines share its one
+        # number; a number held by two different articles is still a clash.
+        flag = df.loc[nonblank.index, "Location_Shared"].fillna(False).astype(bool)
+        listing = (df.loc[nonblank.index, "Listing"].astype(str)
+                   if "Listing" in df.columns else pd.Series("", index=nonblank.index))
+        code = df.loc[nonblank.index, "Code"].astype(str)
+        owner = pd.Series(
+            [f"A|{l}|{c}" if f else f"R|{i}"
+             for i, l, c, f in zip(nonblank.index, listing, code, flag)],
+            index=nonblank.index)
+        nonblank = nonblank[~pd.DataFrame({"n": nonblank, "o": owner}).duplicated()]
     dups = nonblank[nonblank.duplicated(keep=False)]
     if not dups.empty:
         examples = ", ".join(sorted(dups.unique())[:3])
@@ -282,6 +294,27 @@ def check_kromi_uniqueness(df: pd.DataFrame, col: str = "Kromi_Art_No") -> list[
     if not malformed.empty:
         out.append(f"{len(malformed)} KROMI number(s) are malformed (not 12 digits ending in 0).")
     return out
+
+
+# --- Shared articles: one system everywhere (v34.63) ------------------------
+
+def check_shared_article_system(df: pd.DataFrame) -> list[str]:
+    """An article planned in several supply points (``Location_Shared``) is
+    KTC in every one or Kanban in every one, never both (owner decision
+    2026-09-27). Frames without the column pass."""
+    if not {"Location_Shared", "Code", "SystemCategory"} <= set(df.columns):
+        return []
+    shared = df[df["Location_Shared"].astype(bool)]
+    if shared.empty:
+        return []
+    keys = [c for c in ("Listing", "Code") if c in shared.columns]
+    n_sys = shared.groupby(keys)["SystemCategory"].nunique()
+    mixed = n_sys[n_sys > 1]
+    if mixed.empty:
+        return []
+    examples = ", ".join(str(k[-1] if isinstance(k, tuple) else k) for k in list(mixed.index)[:3])
+    return [f"{len(mixed)} shared article(s) are KTC in one supply point and Kanban in "
+            f"another (e.g. {examples})."]
 
 
 # --- VendMode <-> SystemCategory consistency (A5) ---------------------------
@@ -397,6 +430,8 @@ def verify_plan(df: pd.DataFrame, base_info: dict[str, Any] | None = None,
     report.checks["sizing_consistency"] = check_sizing_consistency(df)
     report.checks["vendmode_consistency"] = check_vendmode_consistency(df)
     report.checks["restock_frame"] = check_restock_frame(df)
+    if "Location_Shared" in df.columns:
+        report.checks["shared_article_system"] = check_shared_article_system(df)
     if days_per_month is not None:
         report.checks["target_packs_identity"] = check_target_packs_identity(df, days_per_month)
     if consumption_period_months is not None:

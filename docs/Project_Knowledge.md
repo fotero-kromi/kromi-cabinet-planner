@@ -171,6 +171,10 @@ those tests run in cloud sessions. The sample catalog is customer data and stays
 - Fixed configuration: enter the machines per supply point; articles that do not fit
   are listed as "Not placed", never dropped. Stock-based Helix promotion helps when
   consumption is missing but stock is high.
+- Location column (v34.63): a cell may name several machines; map each machine;
+  use "Not planned here" for machines outside the plan. Every dropdown starts
+  empty, so the run waits until each machine has a choice. Check the capacity
+  line per supply point ("about 1 more Carousel needed") before promising a plan.
 
 ## 10. Open points from the last real onboarding (September 2026)
 

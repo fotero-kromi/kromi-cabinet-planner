@@ -102,6 +102,16 @@ class FingerprintInputs:
     # move-overflow toggle). Folded into the mode-specific position, so it
     # counts only in fixed mode and every other mode keeps its fingerprint.
     fixed_config: Optional[Tuple[Any, ...]] = None
+    # Articles on several machines (v34.63): "count the full consumption in
+    # every supply point". Folded into the programme-map position only when
+    # it is on, so every other run keeps its fingerprint. The machine map
+    # itself (with 0 = not planned here) is ``program_to_sp_map``.
+    full_consumption_shared: bool = False
+
+
+def _program_position(program_to_sp_map: Mapping[Any, Any], full_consumption: bool) -> tuple:
+    mapped = tuple(sorted(program_to_sp_map.items()))
+    return (mapped, "full consumption in every supply point") if full_consumption else mapped
 
 
 def compute_run_fingerprint(i: FingerprintInputs) -> tuple:
@@ -135,7 +145,7 @@ def compute_run_fingerprint(i: FingerprintInputs) -> tuple:
         # The page always supplies a mapping when program mapping is active;
         # the extra None check narrows the optional for the type checker
         # without changing the emitted value for any valid input.
-        (tuple(sorted(i.program_to_sp_map.items()))
+        (_program_position(i.program_to_sp_map, bool(i.full_consumption_shared))
          if (i.program_mapping_active and i.program_to_sp_map is not None) else None),
         i.op_mode,
         tuple(i.restock_categories or ()),

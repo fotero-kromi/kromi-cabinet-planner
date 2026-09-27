@@ -85,6 +85,7 @@ One line per module, taken from the module docstrings; `engine/` is pure
 | `cabinet_math.py` | Cabinet sizing math, the carousel cap, and the rebalancer |
 | `fixed_config.py` | The fixed-configuration mode: fitting the articles into machines that already exist |
 | `takeover.py` | The takeover sheets: per supply point, the customer's stock split into the KTC (up to the article's maximum) and the HLO |
+| `multi_location.py` | Articles on several machines: reading location cells, the per-machine Program mapping, consumption shares, the stock pool and one system per article |
 | `classification.py` | Product category and tool class heuristics, stored-classification application |
 | `overrides.py` | The technician overrides library: validation and application |
 | `invariants.py` | Plan integrity checks: the runtime invariant and reconciliation layer |
@@ -139,7 +140,9 @@ The planner page calls an LLM for the classification fallback; set
   "Not placed" with the reason, never dropped. The capacity buffer, fill
   ceiling and consolidation do not apply and are hidden in this mode. The
   workbook adds `Fixed_Configuration` (capacity, usable, used, free per
-  machine type) and `Not_placed`. Optional **Stock-based Helix promotion**
+  machine type, plus the space the not-placed articles need and an estimate
+  of the machines to add) and `Not_placed`; the page says per supply point
+  whether the machines are enough. Optional **Stock-based Helix promotion**
   (v34.58, off by default, needs the stock column): after the fit, the Helix
   space still free takes the S/M Carousel articles whose stock, spread over
   the months it is assumed to cover (default 3), means more packs a month
@@ -148,6 +151,24 @@ The planner page calls an LLM for the classification fallback; set
   goes to articles that found none. Status `Promoted`; the takeover maximum
   follows the spirals.
 - **Only article number assignment** assigns KROMI numbers without planning.
+
+### Program mapping (supply points per machine)
+
+With a Program (location) column and two or more supply points, the page shows
+one dropdown per machine the column names. A cell may name several machines
+(`AB-100 + AB 101`, `AB-100 +101`; separators `+ & ; ,`), and labels are read
+in one spelling (`ab 101` is `AB-101`). Each dropdown starts empty: choose a
+supply point or "Not planned here"; the run waits until every machine has a
+choice. An article is planned in every supply point its machines map to, with
+an equal share of its consumption per machine ("Count the full consumption in
+every supply point" sizes conservatively instead); a machine that is not
+planned keeps its share out, and an article left without a planned machine
+stops the run with its code. An article on several machines is KTC in every
+supply point when it is KTC in one, has one stock pool on the takeover sheets
+(filled in supply-point order, a "Hinweis" note on its lines) and one KROMI
+number. The Result sheet then adds "Machines (source)" and "Supply points",
+and Run_Metadata the multi-machine counts. A file without multi-machine cells
+plans exactly as before (v34.63, `engine/multi_location.py`).
 
 ### Takeover sheets
 
@@ -251,10 +272,10 @@ scenarios, so two builds can be compared cell by cell.
 
 The synthetic golden gate (v34.59) needs no private data and runs in every
 `pytest` and in CI: `tools/synthetic_golden.py` generates an invented,
-deterministic catalog, drives the page through four scenarios (standard with
+deterministic catalog, drives the page through five scenarios (standard with
 consolidation, capped with two replicated supply points, fixed configuration
 with Program mapping, stock and the stock-based Helix promotion, numbering
-only) and compares the persisted plan tables and the exported workbook with
+only, and a fixed configuration whose location cells name several machines) and compares the persisted plan tables and the exported workbook with
 `tests/golden/synthetic_manifest.json`. After an intended change, run
 `python tools/synthetic_golden.py --update` and say why in the CHANGELOG.
 
