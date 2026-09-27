@@ -381,7 +381,11 @@ def build_result_workbook(
         # which also drops per-sheet any column that is entirely empty.
 
         _ktc_id = ktc_id
+        _numbered_plan = None
+
         def _augment(frame):
+            if _numbered_plan is not None:
+                return _numbered_plan.loc[frame.index]
             return augment_for_export(frame, _ktc_id)
 
         # Re-derive the export sub-frames from the FINAL `work` (post overrides,
@@ -404,6 +408,10 @@ def build_result_workbook(
         # mutate `work` after the preview-stage check, so this is the authoritative
         # verification of what ships.
         _aug_work = _augment(work)
+        if "Location_Shared" in work.columns:
+            # Articles on several machines (v34.63): one number per article
+            # needs the whole plan, so every sheet is cut from its numbers.
+            _numbered_plan = _aug_work
         _result_view = _user_view(_aug_work)
         _ktc_view = _user_view(_augment(df_ktc))
         _kanban_view = _user_view(_augment(df_kanban))

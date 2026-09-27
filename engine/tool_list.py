@@ -7,8 +7,9 @@ caller decides how to show them. Behaviour is unchanged from the page.
 
 Order of use, as in the page:
 ``effective_mapping`` -> ``mapping_collisions`` (must be empty) ->
-``build_tool_list`` -> ``resolve_override_scope`` -> ``assign_supply_points``
-(with a Program mapping) -> ``preprocessing.prepare_planning_base`` ->
+``build_tool_list`` -> ``resolve_override_scope`` ->
+``multi_location.expand_locations`` (with a Program mapping; v34.63, it
+replaced ``assign_supply_points``) -> ``preprocessing.prepare_planning_base`` ->
 ``add_classification_audit_columns`` -> heuristics -> ``plan.run_plan`` ->
 ``apply_export_display_columns``.
 """
@@ -21,6 +22,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 import pandas as pd
 
 from .cabinet_math import SPECIAL_KTC_REASON
+from .multi_location import add_display_columns as _add_location_columns
 from .routing_rules import classify_standard_special, is_regrind
 from .sizing_factors import LISTING_PPE, LISTING_TOOLS
 from .takeover import CATEGORY_TEXT_COL, STOCK_COL
@@ -298,7 +300,8 @@ def apply_export_display_columns(work: pd.DataFrame) -> None:
 
     With a Standard/Special column: ``Std_Special`` and ``Forced_to_KTC``. A
     boolean ``Restockable`` becomes "Yes" / "" (guarded, so a second pass
-    changes nothing).
+    changes nothing). With multi-machine cells (v34.63): "Machines (source)"
+    and "Supply points".
     """
     if "StdSpecial" in work.columns:
         labels = {"standard": "Standard", "special": "Special"}
@@ -309,3 +312,6 @@ def apply_export_display_columns(work: pd.DataFrame) -> None:
         ).map({True: "Yes", False: ""})
     if "Restockable" in work.columns and work["Restockable"].dtype == bool:
         work["Restockable"] = work["Restockable"].map({True: "Yes", False: ""})
+    # Articles on several machines (v34.63): "Machines (source)" and
+    # "Supply points", only when a cell names several machines.
+    _add_location_columns(work)

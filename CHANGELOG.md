@@ -3,6 +3,81 @@
 
 All notable changes to the Kromi Cabinet Planner are documented here.
 
+## [v34.63] - Articles on several machines
+
+A customer's location list may name several vending machines in one cell
+(`AB-100 + AB 101`, `AB-100 +101`, invented labels). v34.62 made each distinct
+cell text one programme with one supply point, started every dropdown on
+SP 1 without a warning (articles of other machines were silently planned in
+the first one) and had no place for a machine outside the plan; splitting the
+rows in Excel shifted the KTC numbers, counted shared stock twice on the
+takeover sheets and gave every copy the full consumption. Owner decisions
+D1 to D6 (2026-09-27); files without multi-machine cells plan exactly as
+before.
+
+- `engine/multi_location.py` (new): `split_locations` / `canonical_location`
+  read a location cell (separators `+ & ; ,`; `/` and `-` stay in names;
+  `ab 101` is `AB-101`; a bare number takes the nearest earlier prefix).
+  `expand_locations` replaces the plain Program map before the planning-base
+  dedup: one copy per supply point the row's machines map to, consumption and
+  stock as the share of its machines there (D1; option "Count the full
+  consumption in every supply point", off by default), new columns
+  `Location_Source`, `Location_Shared` and `Stock_Article_pcs` only when a
+  cell names several machines. The planning base finalizes the flag and the
+  pool after its year filter.
+- Page: one dropdown per machine with "Not planned here"; no default (D3), the
+  run waits with the existing "unassigned" error; an article without a
+  planned machine stops the run with its code (D4); the multi-machine caption,
+  the D1 checkbox and the mapping summary after the shares appear only for
+  such files. Stored runs keep 0 = "Not planned here" and the D1 option; keys
+  of older runs are translated to the canonical label (a key naming several
+  machines is not restored and is named in the banner).
+- Owner decision (2026-09-27, asked during this build): an article is never
+  KTC and Kanban at once. When one supply point's share makes a shared
+  article KTC, its other copies become KTC too, each sized from its own share
+  (after every routing layer; a new plan invariant checks it; the page says
+  how many copies moved).
+- Takeover (D5): one stock pool per article, each source row that reaches the
+  plan counted once; filled in supply-point order with whole packs, the rest
+  at the HLO on the first line; a "Hinweis" column ("Bestand geteilt mit
+  SP 2") on those lines only. A row that lost a share to a machine not planned
+  keeps its whole stock. Replicate is unchanged.
+- Numbers (D6): the KTC counter and the dimension-scheme variants advance once
+  per shared article; every copy shows its number; the Article setup lists it
+  once. Split and unsplit give the same Article setup. With shared articles
+  every sheet is cut from the whole plan's numbers (the uniqueness check
+  accepts the copies of one article). Replicate numbers are unchanged.
+- Fixed configuration: `Fixed_Configuration` gains "Needed by not placed" and
+  "Extra machines (estimate)" (ceil(max(0, needed - free) / usable units per
+  machine after the headroom)); a machine type without machines is listed
+  when not-placed articles need it; the page adds one line per supply point
+  ("SP 2: 3 articles not placed; about 1 more Carousel needed (estimate).").
+- Exports (only with multi-machine cells): Result and its filtered sheets add
+  "Machines (source)" and "Supply points"; Run_Metadata adds the rows naming
+  several machines, the articles in several supply points, the consumption
+  rule and the machines not planned. The run fingerprint carries the D1
+  option; `engine/distribution.py` lists machines per supply point.
+- Tests updated on purpose: `test_fixed_config_wiring.py` and
+  `test_faithful_recompute.py` now choose every machine (there is no SP 1
+  default), and the squeezed fixed run's `Fixed_Configuration` lists the
+  Carousel it needs.
+- Synthetic gate: a fifth scenario `multi_location` (the invented catalog with
+  about 15 % of the rows naming two or three machines, three machines on two
+  supply points, one "Not planned here", fixed configuration with stock). The
+  manifest gains that scenario and one changed digest: the
+  `fixed_program_stock` workbook, because of the two capacity columns and the
+  rows they add (Locker A at SP 1, Carousel at SP 2). Its plan tables are
+  identical. Exported with the technical sheets on, the four existing
+  scenarios are sheet-for-sheet identical to v34.62 except that one
+  `Fixed_Configuration` sheet (default and technical workbooks and the
+  takeover download).
+- Verification: 149 new tests (`test_multi_location_*.py`,
+  `test_capacity_readout.py`, two in `test_synthetic_golden.py`), written before
+  the code and run red first; the five end-to-end page tests also fail on the
+  v34.62 page. The private golden gate on a real customer workbook is required
+  before merging. `python tools/check.py --tests`: 2,374 passed / 25 skipped /
+  0 failed (Python 3.11; the same on Python 3.10).
+
 ## [v34.62] - Column suggestions and run settings move into the engine
 
 Second preparation step for the rewrite: the remaining page logic a standard

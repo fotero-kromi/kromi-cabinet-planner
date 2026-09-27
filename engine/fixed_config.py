@@ -158,6 +158,19 @@ def usable_capacity(machines: MachineSet, headroom_pct: float) -> Dict[str, int]
     return {t: int(math.floor(cap * keep + 1e-9)) for t, cap in physical_capacity(machines).items()}
 
 
+def usable_per_machine(machine_type: str, headroom_pct: float) -> int:
+    """Units one machine of this type offers after the headroom (v34.63)."""
+    keep = (100.0 - clamp_headroom(headroom_pct)) / 100.0
+    return int(math.floor(_PER_MACHINE[machine_type] * keep + 1e-9))
+
+
+def extra_machines(needed: int, free: int, machine_type: str, headroom_pct: float) -> int:
+    """Estimated machines to add: ceil(max(0, needed - free) / usable per machine)."""
+    per = usable_per_machine(machine_type, headroom_pct)
+    missing = max(0, int(needed) - int(free))
+    return int(math.ceil(missing / per)) if missing and per > 0 else 0
+
+
 # ---- per-row helpers ------------------------------------------------------------
 
 def _truthy(value: Any) -> bool:
@@ -447,6 +460,17 @@ def fit_fixed_configuration(
             out.at[idx, "SizeIssue"] = True
             helix_left -= helix_units
 
+    # Capacity readout (v34.63): the units the articles without space would
+    # need in their own machine type, with the fit's footprint.
+    needed = {t: 0 for t in MACHINE_TYPES}
+    for idx in order:
+        if out.at[idx, "Placement_Status"] != STATUS_NOT_PLACED:
+            continue
+        row = out.loc[idx]
+        routed = str(row["CabinetType"])
+        units, _ = _footprint(row, routed, routed, **sizing)
+        needed[routed] += int(units)
+
     report: Dict[str, Any] = {
         "machines": counts,
         "physical": physical_capacity(machines),
@@ -463,6 +487,7 @@ def fit_fixed_configuration(
         "stock_promotion_months": months,
         "promoted": n_promoted,
         "placed_in_freed": n_refilled,
+        "needed_not_placed": needed,
     }
     return out, report
 
@@ -500,15 +525,22 @@ def fixed_plan_for_subset(fitted: pd.DataFrame, report: Dict[str, Any], *,
 
 def capacity_rows(bucket_plans: Sequence[Tuple[str, Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """One row per supply point and configured machine type, for the page and
-    the workbook: machines, capacity, usable after headroom, used, free."""
+    the workbook: machines, capacity, usable after headroom, used, free.
+
+    v34.63 answers "are the configured machines enough?": the units the
+    articles without space would need in their own machine type, and the
+    estimated machines to add. A type without machines is listed when those
+    articles need it."""
     rows: List[Dict[str, Any]] = []
     for label, plan in bucket_plans:
         rep = plan.get("fixed_config")
         if not rep:
             continue
+        needs = rep.get("needed_not_placed") or {}
         for t in MACHINE_TYPES:
             n = int(rep["machines"].get(t, 0))
-            if n == 0 and int(rep["used"].get(t, 0)) == 0:
+            need = int(needs.get(t, 0))
+            if n == 0 and int(rep["used"].get(t, 0)) == 0 and need == 0:
                 continue
             phys = int(rep["physical"][t])
             used = int(rep["used"][t])
@@ -523,8 +555,43 @@ def capacity_rows(bucket_plans: Sequence[Tuple[str, Dict[str, Any]]]) -> List[Di
                 "Used": used,
                 "Free (usable)": int(rep["free"][t]),
                 "Fill % of capacity": round(used / phys * 100.0, 1) if phys else 0.0,
+                "Needed by not placed": need,
+                "Extra machines (estimate)": extra_machines(
+                    need, int(rep["free"][t]), t, rep["headroom_pct"]),
             })
     return rows
+
+
+def _more(n: int, machine_type: str) -> str:
+    return f"{n} more {machine_type}" + (" machines" if n > 1 else "")
+
+
+def capacity_verdicts(bucket_plans: Sequence[Tuple[str, Dict[str, Any]]]) -> List[str]:
+    """One plain line per supply point: are the configured machines enough?
+
+    "SP 1: all articles placed." or "SP 1: 42 articles not placed; about 1
+    more Carousel needed (estimate)." (v34.63)
+    """
+    lines: List[str] = []
+    for _label, plan in bucket_plans:
+        rep = plan.get("fixed_config")
+        if not rep:
+            continue
+        sp = f"SP {int(rep.get('supply_point', 1))}"
+        n_not = int(rep.get("not_placed", 0))
+        if n_not == 0:
+            lines.append(f"{sp}: all articles placed.")
+            continue
+        needs = rep.get("needed_not_placed") or {}
+        more = [_more(k, t) for t in MACHINE_TYPES
+                if (k := extra_machines(int(needs.get(t, 0)), int(rep["free"][t]), t,
+                                        rep["headroom_pct"]))]
+        text = f"{sp}: {n_not} article{'s' if n_not != 1 else ''} not placed"
+        if more:
+            joined = more[0] if len(more) == 1 else ", ".join(more[:-1]) + " and " + more[-1]
+            text += f"; about {joined} needed (estimate)"
+        lines.append(text + ".")
+    return lines
 
 
 def run_meta_rows(bucket_plans: Sequence[Tuple[str, Dict[str, Any]]]) -> List[Dict[str, Any]]:

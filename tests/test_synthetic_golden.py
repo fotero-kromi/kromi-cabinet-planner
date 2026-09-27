@@ -2,7 +2,7 @@
 
 The golden and export capture tools need a private customer workbook, so they
 only ran by hand and never in CI. tools/synthetic_golden.py generates an
-anonymous, deterministic catalog and drives the planner page through four
+anonymous, deterministic catalog and drives the planner page through five
 scenarios; the persisted plan tables and the exported workbook of each must
 match tests/golden/synthetic_manifest.json. This is the safety net for the
 page decomposition (docs/Code_Professionalization_Plan.md, step 0).
@@ -40,6 +40,20 @@ def test_the_catalog_exercises_the_planner():
     assert {"KTC", "", "KTC or Kanban", "Locker"} <= set(df["System"])
     assert (df["Category"] == "Stufenbohrer VHM").any()
     assert df["Description"].str.contains("CNMG").any()               # ISO inserts
+
+
+def test_the_multi_machine_catalog():
+    df = sg.build_multi_catalog()
+    pd.testing.assert_frame_equal(df, sg.build_multi_catalog())
+    base = sg.build_catalog()
+    assert list(df["Article No"]) == list(base["Article No"])
+    assert find_banned_names(df.to_csv(index=False)) == []
+    multi = df["Location"].isin(sg.MULTI_VARIANTS)
+    assert 0.10 < multi.mean() < 0.20
+    assert set(df.loc[multi, "Location"]) == set(sg.MULTI_VARIANTS)
+    assert set(df.loc[~multi, "Location"]) == {"AB-100", "AB-101"}
+    # only the location differs from the base catalog
+    pd.testing.assert_frame_equal(df.drop(columns="Location"), base.drop(columns="Location"))
 
 
 def test_the_manifest_covers_every_scenario():

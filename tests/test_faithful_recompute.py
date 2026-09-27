@@ -153,6 +153,8 @@ def test_load_and_recompute_reproduces_the_run(monkeypatch, tmp_path):
     at.run()
     next(s for s in at.selectbox if str(s.label) == "PPE sheet (optional)").select("PPE").run()
     next(s for s in at.selectbox if s.key == "cm_program").select("Line").run()
+    # v34.63: no machine dropdown starts on a supply point; choose every one.
+    next(s for s in at.selectbox if s.key == "prog_sp::Line A").select(1).run()
     next(s for s in at.selectbox if s.key == "prog_sp::Line B").select(2).run()
     next(t for t in at.text_input if t.label == "KTC-ID").input("150").run()
     at.session_state["_force_run"] = True

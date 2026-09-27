@@ -33,6 +33,7 @@ from .fixed_config import (FIXED_MODE, MachineSet, fit_fixed_configuration,
                            fixed_plan_for_subset, machines_by_sp)
 from .fixed_config import write_back as fixed_write_back
 from .overrides import apply_overrides
+from .multi_location import harmonize_shared_system
 from .plan_config import PlanConfig
 from .classification import detect_item_family, apply_stored_classifications
 from .constants import DAYS_PER_MONTH, LISTING_TOOLS, LISTING_PPE, SIZE_VALID
@@ -705,6 +706,9 @@ class PlanResult:
     rebalance_audit: List[Dict[str, Any]]
     grand: Dict[str, Any]
     restock_info: Dict[str, Any]
+    # Articles on several machines (v34.63): Kanban copies moved to KTC
+    # because the article is KTC at another supply point.
+    shared_ktc_copies: int = 0
 
 
 def _bucket_label(listing: Optional[str], sp: Optional[int]) -> str:
@@ -986,6 +990,16 @@ def run_plan(work: pd.DataFrame, overrides_df: pd.DataFrame,
     work, vend_stats = run_bulk_routing_segment(
         work, enable_bulk_routing=params.enable_bulk_routing)
 
+    # Articles on several machines (v34.63): after every routing layer, an
+    # article KTC at one supply point is KTC at all. No-op for other files.
+    shared_ktc_copies = harmonize_shared_system(
+        work,
+        helix_threshold=float(params.helix_threshold),
+        min_carousel_compartments=int(params.minimum_carousel_allocation),
+        carousel_reserve_factor=float(params.plan_cfg.carousel_reserve_factor),
+        helix_overfill_factor=float(params.plan_cfg.helix_overfill_factor),
+    )
+
     # Pre-rollup data integrity validation
     validation_issues: List[str] = []
     ktc_rows = work[work["SystemCategory"] == "KTC"]
@@ -1109,6 +1123,7 @@ def run_plan(work: pd.DataFrame, overrides_df: pd.DataFrame,
             rebalance_audit=[],
             grand=grand_total(bucket_plans),
             restock_info=restock_info,
+            shared_ktc_copies=shared_ktc_copies,
         )
 
     # Build the list of buckets to compute
@@ -1177,4 +1192,5 @@ def run_plan(work: pd.DataFrame, overrides_df: pd.DataFrame,
         rebalance_audit=rebalance_audit,
         grand=grand_total(bucket_plans),
         restock_info=restock_info,
+        shared_ktc_copies=shared_ktc_copies,
     )

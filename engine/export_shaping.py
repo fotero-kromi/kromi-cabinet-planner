@@ -29,7 +29,11 @@ USER_FRIENDLY_COLS = [
     # demand
     "Consumption_pcs", "Monthly_pcs", "Monthly_packs",
     # plan output
-    "System", "Forced_to_KTC", "SupplyPoint", "CabinetType", "Spirals_needed", "Carousel_stockpiles",
+    "System", "Forced_to_KTC", "SupplyPoint",
+    # articles on several machines (v34.63): present only when a location
+    # cell names several machines
+    "Machines (source)", "Supply points",
+    "CabinetType", "Spirals_needed", "Carousel_stockpiles",
     # fixed configuration (v34.52): present only in that mode
     "Placement_Rank", "Placement_Status", "Placement_Note",
     # restocking (v34.26): display flag and buffer target; user_view drops both
