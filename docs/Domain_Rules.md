@@ -121,6 +121,15 @@ change one only after arguing the case with the owner (CLAUDE.md, rule 1).
   point. Replicate copies keep one number per row (with the documented gaps),
   and so does an article repeated on single-machine rows in a file without
   multi-machine cells.
+- One numbering per workbook (v34.64): the plan is numbered once, and every
+  sheet shows the Result sheet's number: KTC_only, Kanban_only, Helix_only,
+  Carousel_only, Not_placed and Bulk_Routed for the same row, the takeover
+  sheets and the Article setup predecessors for the article's first row. When
+  the plan cannot be numbered, no sheet shows a number. Workbooks exported
+  before v34.64 can show wrong numbers on Helix_only, Carousel_only,
+  Not_placed and Bulk_Routed (those sheets numbered only their own rows); use
+  the Result sheet, or reload the run with "Load & recompute" and download it
+  again.
 
 ## Restocking (machine database)
 

@@ -3,6 +3,55 @@
 
 All notable changes to the Kromi Cabinet Planner are documented here.
 
+## [v34.64] - Every sheet shows the Result sheet's KROMI number
+
+Defect found while building v34.63 (the v34.47 audit named it in the C1
+evidence). The workbook numbered each sheet's rows on their own. The KTC
+running counter and the Kanban dimension variants count in row order within
+the rows they receive, so on Helix_only, Carousel_only, Not_placed and
+Bulk_Routed the counter started again at 1 and an article showed a different
+number from the Result sheet and the Article setup, often the number of
+another article (Carousel_only showed T002 with 191100001000, the Result
+sheet's number of T001). KTC_only and Kanban_only were right because each
+holds every row of its scheme. Owner decision 2026-09-27: number the plan once
+(option A).
+
+- `engine/workbook.py`: the plan is numbered once
+  (`augment_for_export(work, ktc_id)`) and every sheet takes its rows,
+  numbers included, from it. v34.63 did this only for files with multi-machine
+  cells; it is now the only path.
+- A plan that cannot be numbered (a dimension group too large for the variant
+  field) shows no number on any sheet, as the workbook note says; before, the
+  smaller sheets could still carry numbers or an empty number column.
+- Unchanged: the plan, and the numbers on Result, KTC_only, Kanban_only, the
+  Article setup, the takeover sheets and the deck. Workbooks exported before
+  v34.64 can carry wrong numbers on the four sheets (v34.63 files with
+  multi-machine cells excepted): use the Result sheet, or reload the run with
+  "Load & recompute" and download it again. Check any machine that was
+  labelled or loaded from those sheets.
+- Synthetic gate, updated on purpose: the workbook digests of `standard`,
+  `capped_replicate` and `fixed_program_stock` change; `multi_location`,
+  `numbering_only` and every plan table are unchanged. Checked sheet by sheet:
+  only Helix_only, Carousel_only and (fixed_program_stock) Not_placed change,
+  and only in their Kromi_Art_No column. Wrong numbers on those sheets before
+  the fix (after: none): `standard` Helix_only 180 of 180, Carousel_only 33 of
+  34; `capped_replicate` 88 of 88 and 232 of 240; `fixed_program_stock` 86 of
+  88, 146 of 146, Not_placed 62 of 62. No scenario turns on bulk routing;
+  Bulk_Routed is covered by the new test.
+- Private golden gate before merging: between v34.63 and v34.64 the golden
+  dumps are identical and the exported workbooks differ only in the
+  Kromi_Art_No column of Helix_only, Carousel_only, Not_placed and Bulk_Routed
+  (and the Build row).
+- Verification: `tests/test_export_number_agreement.py` (7 tests, written
+  first; 6 failed on v34.63, the Article setup and takeover test passed because
+  those sheets were already right) compares every sheet's number with the
+  Result sheet per (Listing, Code, SupplyPoint) for five plans (Helix and
+  Carousel, two supply points replicated and partitioned, a fixed
+  configuration with articles not placed, bulk routing), the Article setup and
+  takeover numbers with the Result sheet, and a plan that cannot be numbered.
+  `python tools/check.py --tests`: 2,381 passed / 25 skipped / 0 failed
+  (Python 3.11; the same on Python 3.10).
+
 ## [v34.63] - Articles on several machines
 
 A customer's location list may name several vending machines in one cell

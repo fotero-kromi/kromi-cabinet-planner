@@ -45,8 +45,9 @@ repository.
 
 - **Second-source drift** is the recurring bug pattern: the same value computed in
   two places drifts apart (the PDF parameters in v34.01, the sizing factors in
-  v34.09). Keep one canonical object (PlanConfig, PlanParams) and tests that pin
-  readers to it.
+  v34.09, the KROMI numbers of the machine sheets until v34.64, which numbered
+  only their own rows). Keep one canonical object (PlanConfig, PlanParams, the
+  one numbered plan) and tests that pin readers to it.
 - **Structural beats cosmetic.** A UX experiment in v33.67 to v33.71 (metric cards
   via columns, sections folded into expanders, in-place override-set updates) did not
   work out and was fully reverted. The real problem was rerun latency, fixed by the
