@@ -1,8 +1,11 @@
 # Rewrite without Streamlit - decision record
 
 Date: 2026-09-23. Status: the owner decided to prototype a rewrite on a branch
-(`rewrite/fastapi-react`). The stack below is the recommendation; the owner
-confirms it, and where the app runs, before the vertical slice starts.
+(`rewrite/fastapi-react`) and confirmed the stack, the database and where it
+runs (owner decisions below). The vertical slice is complete with PR C: back
+end (PR A), front end (PR B), Docker setup and browser end-to-end test (PR C).
+The front-end refactor that prepares the redesign is done; the redesign
+starts from mockups the owner approves (decisions of 2026-09-24 below).
 
 ## Why
 
@@ -29,39 +32,137 @@ same results.
 
 ## Target architecture
 
-- `engine/` unchanged, with its tests.
+- `engine/` shared by both apps, with its tests. Page logic the new app needs
+  moves into the engine through releases on `main` first; nothing is copied.
 - Service layer: a typed settings object replaces about 100 session-state keys;
   restoring a run becomes "load the stored settings"; the orchestration now in
   the page moves here.
 - API: FastAPI + Pydantic v2. Upload and column inspection, runs, corrections
   (sizes, overrides, programs), exports (workbook, takeover, article setup), run
   history.
-- Plan runs execute in a worker process with progress reported to the browser; a
-  small job table in the database is enough at this user count.
+- Plan runs execute in the background with their status in the database (the
+  job table); the browser polls it. A separate worker process can take over
+  later.
 - Front end: React, TypeScript, Vite; AG Grid Community for editable tables;
-  TanStack Query; client generated from the OpenAPI schema.
-- Database: SQLite locally, Postgres on a server. Microsoft sign-in if central.
-- One Docker image; CI runs pytest, front-end tests, browser end-to-end tests and
-  the synthetic golden gate.
+  Mantine for forms; TanStack Query; client generated from the OpenAPI schema.
+- Database: PostgreSQL only (the Streamlit app keeps SQLite until it is
+  replaced). Microsoft sign-in when central.
+- Docker: the app image and PostgreSQL started by one `docker compose` command;
+  CI runs pytest, front-end tests, browser end-to-end tests and the parity
+  oracle.
 
 ## Parity oracle
 
-The four synthetic scenarios (`tools/synthetic_golden.py`) sent through the new
-API must produce the same digests as `tests/golden/synthetic_manifest.json`. That
-proves the rewrite changes no result.
+The synthetic scenarios (`tools/synthetic_golden.py`) sent through the new app
+must give exactly what the Streamlit app gives, as recorded in
+`tests/golden/synthetic_manifest.json`:
+
+- `workbook`: every cell of every sheet of the exported workbook (the build,
+  timestamp and AI model rows left out);
+- `plan_result`: the planner's own result (article rows, bucket plans, grand
+  totals, restock, bulk routing, overrides, validation, consolidation log),
+  recorded from the Streamlit run. Unlike the older plan-table digests it does
+  not depend on the SQLite archive's layout. The new app must match it straight
+  from the service and again after storing the result in PostgreSQL and
+  reading it back.
+
+Each scenario joins the new app's parity tests when its screen is built; the
+rewrite is at parity when all five match (v34.63 added `multi_location`). A change on `main` that changes
+results updates the manifest there (`--update`); after the merge into this
+branch, the new app's parity tests fail until the new app gives the same
+result, and `plan_result` is regenerated with `--update` on this branch.
 
 ## Plan
 
-1. Vertical slice (4 to 5 days): upload, mapping, standard run, results grid,
-   workbook download, matching the `standard` scenario. Go / no-go point.
+1. Vertical slice: upload, mapping, standard run, results grid, workbook
+   download, matching the `standard` scenario. Go / no-go point.
+   - Preparation on `main`: v34.61 (tool list, export tables, setting
+     defaults) and v34.62 (column suggestions, run settings) moved the page
+     logic the slice needs into the engine, byte-identical.
+   - PR A: back end (service layer, PostgreSQL, API) and the parity oracle.
+   - PR B: front end (screens, generated client, unit tests). Four steps:
+     upload, sheet and columns, settings, run and results with the workbook
+     download. The TypeScript client is generated from `frontend/openapi.json`,
+     which a back-end test keeps equal to the served schema; the schema carries
+     an API version, not the engine build, so a release on `main` does not
+     change it. Not in the slice: the other operation modes, the Program to
+     supply point assignment (a run that needs it fails with the list of
+     programmes), per-class thresholds, the PPE sheet, AI, corrections and
+     restoring an earlier run.
+   - PR C: Docker setup and browser end-to-end tests. `compose.yaml` starts
+     the app and PostgreSQL 18 with one command on port 8080 (127.0.0.1 only);
+     the back end serves the built front end, so the app is one address. CI
+     builds and starts exactly this setup and runs a browser through the
+     synthetic standard scenario (`e2e/`); the downloaded workbook must have
+     the manifest's digest, and a run must survive a restart. Windows guide
+     for Docker Desktop and Rancher Desktop: `docs/New_App_Docker.md`.
 2. Screen by screen to parity. Engine fixes ship from `main` and reach the branch
    by merge.
+   - v34.63 (articles on several machines, merged in): the engine has it; the
+     new app still needs the per-machine Program mapping with "Not planned
+     here", no default and the two blocking checks (a machine without a
+     choice, an article without a planned machine); the option "Count the
+     full consumption in every supply point", stored with the run; and the
+     capacity readout (the two `Fixed_Configuration` columns and one line per
+     supply point). Until then the back end keeps the v34.62 per-programme
+     assignment (`tool_list.assign_supply_points`), which treats a cell
+     naming several machines as one programme.
+
+Page logic still to move into the engine with the next release on `main`:
+which sheet is preselected as the Tools sheet (the first sheet whose name
+contains tool, werkzeug, outil or herramienta). Until then the new app
+preselects no sheet; the user picks it, and results do not depend on it.
 
 Effort (AI-assisted working days): service layer and typed settings 5 to 7 (needed
 by either stack); FastAPI + React about 28 to 37 in total; NiceGUI about 19 to 25.
 
-## Open decisions (owner)
+## Owner decisions (2026-09-23)
 
-1. Stack: FastAPI + React (recommended) or NiceGUI.
-2. Where it runs: a central server with Microsoft sign-in (recommended when more
-   than one planner uses it) or on each user's PC.
+1. Stack: FastAPI + React/TypeScript (Vite), API-first; the TypeScript client
+   is generated from the OpenAPI schema.
+2. Database: PostgreSQL for the new app (SQLAlchemy 2, Alembic, psycopg 3). No
+   SQLite in the new app; the Streamlit app on main keeps SQLite until it is
+   replaced. Major version 18, pinned by the image tag `postgres:18` (it
+   follows 18's newest minor release, never a fresh .0 of a new major).
+3. Tests run against a real PostgreSQL, never a SQLite stand-in: a PostgreSQL
+   18 service container in CI (the reference) and the PostgreSQL installed in
+   cloud sessions (16 is acceptable there).
+4. Hosting direction: a central server (app + PostgreSQL). Microsoft login
+   later; the slice runs without login, reachable from the PC it runs on only.
+   The owner tries the prototype with Docker on a Windows PC: one
+   `docker compose` command starts everything, the browser opens port 8080.
+   The instructions work with Docker Desktop and Rancher Desktop (the licence
+   is being checked with IT).
+5. No import of the old SQLite history: the new app starts with an empty
+   database.
+6. The engine is reused and stays pure. No page logic is copied into the new
+   app: what it needs moves into the engine by a release on `main` first
+   (byte-identical, with the real-file check before merging).
+7. Parity: the new plan-result fingerprint is added to the manifest,
+   generated from the Streamlit app.
+8. The slice is delivered in three PRs into `rewrite/fastapi-react`: A back
+   end and parity, B front end, C Docker and end-to-end tests.
+
+## Owner decisions (2026-09-24): the front-end redesign
+
+1. Before any other operation mode is built, the front end is redesigned as
+   operation-first guided flows: each operation shows only its own fields,
+   advanced settings sit in a side panel with their defaults, results are shown
+   in tabs.
+2. Order: PR C, then a refactor PR, then a stop. The refactor keeps every
+   result and screen behaviour unchanged (the front-end tests and the
+   end-to-end workbook digest stay as they are) and prepares the redesign:
+   - the settings form is driven by one description per setting (kind, label,
+     help, group, advanced or not, the operation modes it applies to, when it
+     shows), rendered by one generic form instead of a hand-laid page;
+   - the screens are split into small reusable components (file drop, sheet
+     picker, mapping grid, settings form, totals, article table, run status).
+3. The redesign starts only from mockups the owner has approved.
+
+Refactor done: `frontend/src/lib/settingFields.ts` holds the setting
+descriptions (the "advanced" marks are a first proposal, to be settled with the
+mockups; the operation modes that hide a field are the Streamlit page's rules),
+`SettingsForm` renders them, and the screens are built from the components in
+`frontend/src/components/`. Screens, requests and results are unchanged: the
+existing front-end tests pass unedited and the end-to-end workbook digest is
+the same.

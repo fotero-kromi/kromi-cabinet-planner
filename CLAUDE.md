@@ -27,6 +27,23 @@ python tools/synthetic_golden.py --update    # only after an intended result cha
 python tools/package_release.py . kromi_app_vXX.YY.zip   # release zip (allow-list)
 ```
 
+The new app (branch `rewrite/fastapi-react`, `docs/Rewrite_Decision.md`):
+
+```bash
+pip install -r backend/requirements-dev.txt  # back-end dependencies
+python tools/check_new_app.py                # back end (ruff, mypy, pytest on PostgreSQL) and front end
+cd backend && alembic upgrade head           # migrate the database in KROMI_DATABASE_URL
+python -m uvicorn --app-dir backend kromi_api.main:app   # run the API (repository root)
+python tools/check_new_app.py --frontend     # front end only: client, lint, types, tests, build
+python tools/export_openapi.py               # after an API change: frontend/openapi.json
+cd frontend && npm ci                        # front-end packages (Node 22), from the lock file
+cd frontend && npm run gen:api               # regenerate the TypeScript client from openapi.json
+cd frontend && npm run dev                   # front end on port 5173, forwards /api to port 8000
+docker compose up -d --build                 # the whole new app on http://localhost:8080 (docs/New_App_Docker.md)
+pip install -r e2e/requirements.txt          # browser test tools, then: python -m playwright install chromium
+python -m pytest e2e                         # browser test against the app on port 8080 (KROMI_E2E_URL)
+```
+
 ## Non-negotiable rules
 
 1. **Argue before implementing** anything correctness-sensitive or architectural:

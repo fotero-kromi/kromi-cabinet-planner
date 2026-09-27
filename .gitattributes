@@ -1,0 +1,5 @@
+# Unix line endings for what runs inside Linux containers, also when the
+# repository is checked out on Windows.
+*.sh text eol=lf
+Dockerfile text eol=lf
+compose.yaml text eol=lf

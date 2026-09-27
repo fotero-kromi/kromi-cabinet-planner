@@ -1,0 +1,9 @@
+# The browser end-to-end test of the new app (e2e/, run against the Docker
+# setup). Install: pip install -r e2e/requirements.txt
+#                  python -m playwright install --with-deps chromium
+playwright==1.63.0
+pytest>=8.0
+# tools/synthetic_golden.py builds the catalog and the workbook digest.
+pandas>=2.0,<3.0
+numpy<2.5
+openpyxl>=3.1

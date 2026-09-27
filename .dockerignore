@@ -1,0 +1,24 @@
+# Only what docker/Dockerfile copies is needed; customer files, secrets and
+# runtime data must never enter an image.
+**/*.xlsx
+**/*.xls
+**/*.xlsm
+**/*.csv
+**/.env
+**/.env.*
+runs/
+catalogs/
+overrides/
+**/node_modules
+**/dist
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+.git
+.github
+.claude
+e2e/artifacts
+# Tests stay out of the image.
+backend/tests

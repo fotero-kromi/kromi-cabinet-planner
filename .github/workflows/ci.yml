@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, rewrite/fastapi-react]
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, rewrite/fastapi-react]
 
 jobs:
   quality:

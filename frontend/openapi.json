@@ -1,0 +1,1708 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kromi Cabinet Planner",
+    "version": "1"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Api V1 Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/defaults": {
+      "get": {
+        "summary": "Defaults",
+        "operationId": "defaults_api_v1_settings_defaults_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workbooks": {
+      "post": {
+        "summary": "Upload Workbook",
+        "operationId": "upload_workbook_api_v1_workbooks_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_workbook_api_v1_workbooks_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbookOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Already stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbookOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workbooks/{workbook_id}/sheets/{sheet}": {
+      "get": {
+        "summary": "Inspect Sheet",
+        "operationId": "inspect_sheet_api_v1_workbooks__workbook_id__sheets__sheet__get",
+        "parameters": [
+          {
+            "name": "workbook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Workbook Id"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sheet"
+            }
+          },
+          {
+            "name": "header_row",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 1,
+              "title": "Header Row"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SheetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workbooks/{workbook_id}/mapping/check": {
+      "post": {
+        "summary": "Check Mapping",
+        "operationId": "check_mapping_api_v1_workbooks__workbook_id__mapping_check_post",
+        "parameters": [
+          {
+            "name": "workbook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Workbook Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingCheckIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingCheckOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs": {
+      "post": {
+        "summary": "Create Run",
+        "operationId": "create_run_api_v1_runs_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Identical finished run reused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Runs",
+        "operationId": "list_runs_api_v1_runs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunOut"
+                  },
+                  "title": "Response List Runs Api V1 Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "summary": "Get Run",
+        "operationId": "get_run_api_v1_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/tools": {
+      "get": {
+        "summary": "Run Tools",
+        "operationId": "run_tools_api_v1_runs__run_id__tools_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ToolOut"
+                  },
+                  "title": "Response Run Tools Api V1 Runs  Run Id  Tools Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/workbook": {
+      "get": {
+        "summary": "Run Workbook",
+        "operationId": "run_workbook_api_v1_runs__run_id__workbook_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            }
+          },
+          "409": {
+            "description": "Run not finished"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_upload_workbook_api_v1_workbooks_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_workbook_api_v1_workbooks_post"
+      },
+      "BucketOut": {
+        "properties": {
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "ktc_count": {
+            "type": "integer",
+            "title": "Ktc Count"
+          },
+          "kanban_count": {
+            "type": "integer",
+            "title": "Kanban Count"
+          },
+          "helix_cabinets": {
+            "type": "integer",
+            "title": "Helix Cabinets"
+          },
+          "carousel_cabinets": {
+            "type": "integer",
+            "title": "Carousel Cabinets"
+          },
+          "locker_a_cabinets": {
+            "type": "integer",
+            "title": "Locker A Cabinets"
+          },
+          "locker_b_cabinets": {
+            "type": "integer",
+            "title": "Locker B Cabinets"
+          },
+          "locker_c_cabinets": {
+            "type": "integer",
+            "title": "Locker C Cabinets"
+          },
+          "total_cabinets": {
+            "type": "integer",
+            "title": "Total Cabinets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "position",
+          "label",
+          "ktc_count",
+          "kanban_count",
+          "helix_cabinets",
+          "carousel_cabinets",
+          "locker_a_cabinets",
+          "locker_b_cabinets",
+          "locker_c_cabinets",
+          "total_cabinets"
+        ],
+        "title": "BucketOut"
+      },
+      "ColumnMappingIn": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Code"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Description"
+          },
+          "consumption": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Consumption"
+          },
+          "description_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description 2"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "supplier_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Code"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "pack_units": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Units"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "program": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Program"
+          },
+          "restocking": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restocking"
+          },
+          "site": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site"
+          },
+          "std_special": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Std Special"
+          },
+          "dimensions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dimensions"
+          },
+          "regrind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regrind"
+          },
+          "system_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Type"
+          },
+          "stock": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "description",
+          "consumption"
+        ],
+        "title": "ColumnMappingIn",
+        "description": "Source column per planning field; ``None`` = not mapped."
+      },
+      "DefaultsOut": {
+        "properties": {
+          "header_row": {
+            "type": "integer",
+            "title": "Header Row"
+          },
+          "planning": {
+            "$ref": "#/components/schemas/PlanningIn"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ScopeIn"
+          },
+          "export": {
+            "$ref": "#/components/schemas/ExportIn"
+          },
+          "limits": {
+            "additionalProperties": {
+              "prefixItems": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "object",
+            "title": "Limits"
+          },
+          "labels": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Labels"
+          },
+          "choices": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Choices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "header_row",
+          "planning",
+          "scope",
+          "export",
+          "limits",
+          "labels",
+          "choices"
+        ],
+        "title": "DefaultsOut"
+      },
+      "ExportIn": {
+        "properties": {
+          "include_planogram": {
+            "type": "boolean",
+            "title": "Include Planogram",
+            "default": true
+          },
+          "include_technical": {
+            "type": "boolean",
+            "title": "Include Technical",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ExportIn"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MappingCheckIn": {
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "title": "Sheet"
+          },
+          "header_row": {
+            "type": "integer",
+            "title": "Header Row",
+            "default": 1
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ColumnMappingIn"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sheet",
+          "mapping"
+        ],
+        "title": "MappingCheckIn"
+      },
+      "MappingCheckOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "conflicts": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Conflicts"
+          },
+          "missing_columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Columns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "conflicts",
+          "missing_columns"
+        ],
+        "title": "MappingCheckOut"
+      },
+      "PlanningIn": {
+        "properties": {
+          "use_description_2": {
+            "type": "boolean",
+            "title": "Use Description 2",
+            "default": true
+          },
+          "year_mode": {
+            "type": "string",
+            "title": "Year Mode",
+            "default": "all_rows"
+          },
+          "dedup_mode": {
+            "type": "string",
+            "title": "Dedup Mode",
+            "default": "code_supplier"
+          },
+          "ktc_threshold": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Ktc Threshold",
+            "default": 1.0
+          },
+          "optional_thresholds_active": {
+            "type": "boolean",
+            "title": "Optional Thresholds Active",
+            "default": false
+          },
+          "per_class_thresholds": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Per Class Thresholds",
+            "default": []
+          },
+          "insert_pack_units": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Insert Pack Units",
+            "default": 10
+          },
+          "helix_threshold": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Helix Threshold",
+            "default": 6.0
+          },
+          "consumption_months": {
+            "type": "number",
+            "minimum": 1.0,
+            "title": "Consumption Months",
+            "default": 12.0
+          },
+          "helix_overfill_factor": {
+            "type": "number",
+            "minimum": 1.0,
+            "title": "Helix Overfill Factor",
+            "default": 1.1
+          },
+          "min_carousel_allocation": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Min Carousel Allocation",
+            "default": 3
+          },
+          "coverage_days": {
+            "type": "integer",
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Coverage Days",
+            "default": 20
+          },
+          "coverage_days_special": {
+            "type": "integer",
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Coverage Days Special",
+            "default": 20
+          },
+          "special_ktc": {
+            "type": "boolean",
+            "title": "Special Ktc",
+            "default": false
+          },
+          "carousel_reserve_factor": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.05,
+            "title": "Carousel Reserve Factor",
+            "default": 0.85
+          },
+          "carousel_fill_ceiling": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.5,
+            "title": "Carousel Fill Ceiling",
+            "default": 1.0
+          },
+          "enable_rebalancer": {
+            "type": "boolean",
+            "title": "Enable Rebalancer",
+            "default": true
+          },
+          "underuse_threshold_pct": {
+            "type": "number",
+            "maximum": 80.0,
+            "minimum": 5.0,
+            "title": "Underuse Threshold Pct",
+            "default": 30.0
+          },
+          "capacity_buffer_pct": {
+            "type": "number",
+            "maximum": 200.0,
+            "minimum": 0.0,
+            "title": "Capacity Buffer Pct",
+            "default": 15.0
+          },
+          "restock_categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Restock Categories",
+            "default": []
+          },
+          "pack_hint_extraction": {
+            "type": "boolean",
+            "title": "Pack Hint Extraction",
+            "default": true
+          },
+          "bulk_routing": {
+            "type": "boolean",
+            "title": "Bulk Routing",
+            "default": false
+          },
+          "force_screws_kanban": {
+            "type": "boolean",
+            "title": "Force Screws Kanban",
+            "default": false
+          },
+          "n_supply_points": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "N Supply Points",
+            "default": 1
+          },
+          "sp_mode": {
+            "type": "string",
+            "title": "Sp Mode",
+            "default": "replicate"
+          },
+          "calc_mode": {
+            "type": "string",
+            "title": "Calc Mode",
+            "default": "combined"
+          },
+          "op_mode": {
+            "type": "string",
+            "title": "Op Mode",
+            "default": ""
+          },
+          "max_carousels": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Carousels",
+            "default": 2
+          },
+          "fixed_headroom_pct": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": 0.0,
+            "title": "Fixed Headroom Pct",
+            "default": 10.0
+          },
+          "fixed_allow_spill": {
+            "type": "boolean",
+            "title": "Fixed Allow Spill",
+            "default": true
+          },
+          "fixed_stock_promotion": {
+            "type": "boolean",
+            "title": "Fixed Stock Promotion",
+            "default": false
+          },
+          "fixed_stock_months": {
+            "type": "number",
+            "maximum": 24.0,
+            "minimum": 0.5,
+            "title": "Fixed Stock Months",
+            "default": 3.0
+          },
+          "fixed_machines": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 6,
+              "minItems": 6
+            },
+            "type": "array",
+            "title": "Fixed Machines",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PlanningIn",
+        "description": "The planning controls; field names and defaults are ``RunSettings``'."
+      },
+      "RunCreate": {
+        "properties": {
+          "workbook_id": {
+            "type": "integer",
+            "title": "Workbook Id"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/RunRequest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workbook_id",
+          "settings"
+        ],
+        "title": "RunCreate"
+      },
+      "RunError": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "RunError"
+      },
+      "RunOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "workbook_id": {
+            "type": "integer",
+            "title": "Workbook Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "engine_build": {
+            "type": "string",
+            "title": "Engine Build"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settings"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunSummaryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reused": {
+            "type": "boolean",
+            "title": "Reused",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workbook_id",
+          "status",
+          "engine_build",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "settings",
+          "error",
+          "notes",
+          "summary"
+        ],
+        "title": "RunOut"
+      },
+      "RunRequest": {
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Sheet"
+          },
+          "header_row": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Header Row",
+            "default": 1
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ColumnMappingIn"
+          },
+          "planning": {
+            "$ref": "#/components/schemas/PlanningIn",
+            "default": {
+              "use_description_2": true,
+              "year_mode": "all_rows",
+              "dedup_mode": "code_supplier",
+              "ktc_threshold": 1.0,
+              "optional_thresholds_active": false,
+              "per_class_thresholds": [],
+              "insert_pack_units": 10,
+              "helix_threshold": 6.0,
+              "consumption_months": 12.0,
+              "helix_overfill_factor": 1.1,
+              "min_carousel_allocation": 3,
+              "coverage_days": 20,
+              "coverage_days_special": 20,
+              "special_ktc": false,
+              "carousel_reserve_factor": 0.85,
+              "carousel_fill_ceiling": 1.0,
+              "enable_rebalancer": true,
+              "underuse_threshold_pct": 30.0,
+              "capacity_buffer_pct": 15.0,
+              "restock_categories": [],
+              "pack_hint_extraction": true,
+              "bulk_routing": false,
+              "force_screws_kanban": false,
+              "n_supply_points": 1,
+              "sp_mode": "replicate",
+              "calc_mode": "combined",
+              "op_mode": "",
+              "max_carousels": 2,
+              "fixed_headroom_pct": 10.0,
+              "fixed_allow_spill": true,
+              "fixed_stock_promotion": false,
+              "fixed_stock_months": 3.0,
+              "fixed_machines": []
+            }
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ScopeIn",
+            "default": {
+              "customer": "",
+              "site": "",
+              "ktc_id": "191",
+              "apply_overrides": true
+            }
+          },
+          "export": {
+            "$ref": "#/components/schemas/ExportIn",
+            "default": {
+              "include_planogram": true,
+              "include_technical": false
+            }
+          },
+          "program_to_sp": {
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1.0
+            },
+            "type": "object",
+            "title": "Program To Sp",
+            "default": {}
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sheet",
+          "mapping"
+        ],
+        "title": "RunRequest",
+        "description": "Everything one planning run needs besides the workbook itself."
+      },
+      "RunSummaryOut": {
+        "properties": {
+          "customer": {
+            "type": "string",
+            "title": "Customer"
+          },
+          "site": {
+            "type": "string",
+            "title": "Site"
+          },
+          "grand": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Grand"
+          },
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/BucketOut"
+            },
+            "type": "array",
+            "title": "Buckets"
+          },
+          "validation_issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Validation Issues"
+          },
+          "export_problems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Export Problems"
+          },
+          "export_notes": {
+            "type": "string",
+            "title": "Export Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer",
+          "site",
+          "grand",
+          "buckets",
+          "validation_issues",
+          "export_problems",
+          "export_notes"
+        ],
+        "title": "RunSummaryOut"
+      },
+      "ScopeIn": {
+        "properties": {
+          "customer": {
+            "type": "string",
+            "title": "Customer",
+            "default": ""
+          },
+          "site": {
+            "type": "string",
+            "title": "Site",
+            "default": ""
+          },
+          "ktc_id": {
+            "type": "string",
+            "title": "Ktc Id",
+            "default": "191"
+          },
+          "apply_overrides": {
+            "type": "boolean",
+            "title": "Apply Overrides",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ScopeIn",
+        "description": "Whose run this is (Run_Metadata, override scope) and the numbering KTC-ID."
+      },
+      "SheetOut": {
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "title": "Sheet"
+          },
+          "header_row": {
+            "type": "integer",
+            "title": "Header Row"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "preview": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Preview"
+          },
+          "headers_look_misplaced": {
+            "type": "boolean",
+            "title": "Headers Look Misplaced"
+          },
+          "suggested_header_row": {
+            "type": "integer",
+            "title": "Suggested Header Row"
+          },
+          "suggested_mapping": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Suggested Mapping"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sheet",
+          "header_row",
+          "columns",
+          "row_count",
+          "preview",
+          "headers_look_misplaced",
+          "suggested_header_row",
+          "suggested_mapping"
+        ],
+        "title": "SheetOut"
+      },
+      "ToolOut": {
+        "properties": {
+          "line_no": {
+            "type": "integer",
+            "title": "Line No"
+          },
+          "listing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listing"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "pack_units": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Units"
+          },
+          "system_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Category"
+          },
+          "cabinet_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cabinet Type"
+          },
+          "supply_point": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supply Point"
+          },
+          "monthly_pcs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Pcs"
+          },
+          "monthly_packs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Packs"
+          },
+          "spirals": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spirals"
+          },
+          "compartments": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compartments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_no",
+          "listing",
+          "code",
+          "description",
+          "category",
+          "size",
+          "pack_units",
+          "system_category",
+          "cabinet_type",
+          "supply_point",
+          "monthly_pcs",
+          "monthly_packs",
+          "spirals",
+          "compartments"
+        ],
+        "title": "ToolOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WorkbookOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "uploaded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Uploaded At"
+          },
+          "sheets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sheets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sha256",
+          "filename",
+          "size_bytes",
+          "uploaded_at",
+          "sheets"
+        ],
+        "title": "WorkbookOut"
+      }
+    }
+  }
+}

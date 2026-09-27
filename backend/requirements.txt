@@ -1,0 +1,19 @@
+# The new app's back end (FastAPI + PostgreSQL). Runtime dependencies.
+# Install: pip install -r backend/requirements.txt
+#
+# The planning engine (engine/) is shared with the Streamlit app and needs only
+# pandas, numpy and openpyxl; defusedxml hardens the reading of uploaded
+# workbooks (openpyxl uses it when installed).
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.7,<3.0
+python-multipart>=0.0.9
+sqlalchemy>=2.0.30,<2.1
+alembic>=1.13,<2.0
+psycopg[binary]>=3.2,<4.0
+
+pandas>=2.0,<3.0
+numpy<2.5
+openpyxl>=3.1
+defusedxml>=0.7
